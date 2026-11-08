@@ -1,0 +1,23 @@
+{
+  "name": "latam-cargo-booking",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playable front end of the LATAM Cargo new-booking flow: happy path, inline errors and edge cases.",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/build.mjs --dev",
+    "build": "node tools/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "screens": "python3 tools/convert.py"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.0"
+  }
+}
