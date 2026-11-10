@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { FLOWS, GROUPS, REEL } from "./flows";
-import type { Flow, Step } from "./flows";
+import type { Flow } from "./flows";
+import { Prototype, StaticPrototype, presetBooking, presetUi } from "./proto/Prototype";
+import { INITIAL_UI } from "./proto/store";
+import type { Page, Ui } from "./proto/store";
 
 const SCREEN_WIDTH = 1400;
 
@@ -34,7 +37,7 @@ function useRoute(): Route {
 
 /* ---------- a screen scaled to the available width ---------- */
 
-function ScaledScreen({ step, onCta, max = 1 }: { step: Step; onCta?: () => void; max?: number }) {
+function ScaledScreen({ children, cta, onCta, max = 1 }: { children: ReactNode; cta?: string; onCta?: () => void; max?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -48,33 +51,37 @@ function ScaledScreen({ step, onCta, max = 1 }: { step: Step; onCta?: () => void
     return () => ro.disconnect();
   }, [max]);
 
-  // Highlight the button that moves the flow forward
+  // Highlight the control that moves the flow forward, and keep it highlighted as the live screen re-renders
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    el.querySelectorAll(".cta-hotspot").forEach((b) => b.classList.remove("cta-hotspot"));
-    if (!step.cta || !onCta) return;
-    const cta = step.cta;
-    const target =
-      [...el.querySelectorAll<HTMLElement>("button, a")].find((b) => b.textContent?.trim().startsWith(cta)) ??
-      // Tabs in the mockups are plain text: fall back to a leaf element with that exact label
-      [...el.querySelectorAll<HTMLElement>("span, div")].find(
-        (b) => b.childElementCount === 0 && b.textContent?.trim() === cta,
-      );
-    target?.classList.add("cta-hotspot");
-  }, [step, onCta]);
+    const mark = () => {
+      const old = el.querySelector(".cta-hotspot");
+      if (!cta) return old?.classList.remove("cta-hotspot");
+      const target =
+        [...el.querySelectorAll<HTMLElement>("button, a")].find((b) => !b.hasAttribute("disabled") && b.textContent?.trim().startsWith(cta)) ??
+        // Tabs in the mockups are plain text: fall back to a leaf element with that exact label
+        [...el.querySelectorAll<HTMLElement>("span, div")].find((b) => b.childElementCount === 0 && b.textContent?.trim() === cta);
+      if (old && old !== target) old.classList.remove("cta-hotspot");
+      if (target && !target.classList.contains("cta-hotspot")) target.classList.add("cta-hotspot");
+    };
+    mark();
+    const mo = new MutationObserver(() => mark());
+    mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+    return () => mo.disconnect();
+  }, [cta]);
 
   const onClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    // Links in the mockup go nowhere: keep the prototype on the current step
+    // Links in the mockups go nowhere: keep the prototype on the current step
     if (target.closest("a")) e.preventDefault();
-    if (target.closest(".cta-hotspot")) onCta?.();
+    if (onCta && target.closest(".cta-hotspot")) onCta();
   };
 
   return (
     <div className="screen-box" ref={box}>
       <div className="screen" style={{ zoom: scale }} onClick={onClick}>
-        {step.render()}
+        {children}
       </div>
     </div>
   );
@@ -163,6 +170,29 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
   const last = step === flow.steps.length - 1;
   const next = FLOWS[FLOWS.indexOf(flow) + 1];
 
+  // The live app's data and state, kept across the screens of a flow
+  const [booking, setBooking] = useState(() => presetBooking(current.preset));
+  const [ui, setUiState] = useState(() => presetUi(current.preset));
+  const onUi = useCallback((patch: Partial<Ui>) => setUiState((u) => ({ ...u, ...patch })), []);
+  /** A page the user reached by clicking around that isn't part of this flow */
+  const [offPage, setOffPage] = useState<Page | null>(null);
+  const inApp = useRef(false);
+  const lastFlow = useRef(flow.id);
+
+  // Entering a step from the player (Next, Previous, the list or a link) loads its preset
+  useEffect(() => {
+    setOffPage(null);
+    if (inApp.current) {
+      inApp.current = false;
+      return;
+    }
+    const s = flow.steps[step];
+    const freshFlow = lastFlow.current !== flow.id;
+    lastFlow.current = flow.id;
+    if (freshFlow || s.preset?.b) setBooking(freshFlow ? presetBooking(s.preset) : (b) => ({ ...b, ...s.preset?.b }));
+    setUiState((u) => ({ ...(freshFlow ? INITIAL_UI : { ...INITIAL_UI, draft: u.draft, savedAt: u.savedAt }), ...s.preset?.ui }));
+  }, [flow, step]);
+
   const go = useCallback(
     (n: number) => {
       if (n >= 0 && n < flow.steps.length) window.location.hash = flowHref(flow.id, n + 1);
@@ -170,10 +200,26 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
     [flow],
   );
 
+  // The user navigated inside the live app: follow along in the flow when that page is part of it
+  const onNavigate = useCallback(
+    (page: Page) => {
+      const ahead = flow.steps.findIndex((s, i) => i > step && s.page === page);
+      const behind = flow.steps.map((s, i) => (i < step && s.page === page ? i : -1)).filter((i) => i >= 0).pop() ?? -1;
+      const target = ahead >= 0 ? ahead : behind;
+      if (target >= 0) {
+        inApp.current = true;
+        go(target);
+      } else {
+        setOffPage(page === current.page ? null : page);
+      }
+    },
+    [flow, step, current.page, go],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select, [contenteditable]")) return;
+      if (t.closest("input, textarea, select, [contenteditable], .screen")) return;
       if (e.key === "ArrowRight") go(step + 1);
       if (e.key === "ArrowLeft") go(step - 1);
       if (e.key === "Escape") window.location.hash = "#/";
@@ -188,6 +234,8 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
       document.title = "LATAM Cargo · New booking flows";
     };
   }, [flow]);
+
+  const livePage = offPage ?? current.page;
 
   return (
     <div className="player">
@@ -232,10 +280,13 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
           </ol>
           <div className="note">
             <p>{current.note}</p>
-            {current.cta && !last && (
+            {current.cta && !last && !offPage && (
               <p className="hint">
-                Click <b>{current.cta}</b> on the screen to continue.
+                Click <b>{current.cta}</b> on the screen to continue, or use Next.
               </p>
+            )}
+            {current.page && !offPage && (
+              <p className="hint">Everything on this screen works: fields, dropdowns, menu, search and buttons.</p>
             )}
             {last && (
               <p className="hint">
@@ -249,8 +300,26 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
               </p>
             )}
           </div>
+          {offPage && (
+            <div className="note off">
+              <p>You’re exploring outside this flow. Keep clicking around, or go back to the scripted screen.</p>
+              <button type="button" onClick={() => setOffPage(null)}>
+                ← Back to step {step + 1}: {current.label}
+              </button>
+            </div>
+          )}
         </aside>
-        <ScaledScreen key={`${flow.id}-${step}`} step={current} onCta={last ? undefined : () => go(step + 1)} />
+        <ScaledScreen
+          key={`${flow.id}-${step}-${livePage ?? "static"}`}
+          cta={offPage ? undefined : current.cta}
+          onCta={!current.page && !last ? () => go(step + 1) : undefined}
+        >
+          {livePage ? (
+            <Prototype page={livePage} booking={booking} ui={ui} onBooking={setBooking} onUi={onUi} onNavigate={onNavigate} />
+          ) : (
+            current.render?.()
+          )}
+        </ScaledScreen>
       </div>
     </div>
   );
@@ -264,9 +333,10 @@ function Embed() {
     const t = window.setInterval(() => setI((n) => (n + 1) % REEL.length), 2600);
     return () => window.clearInterval(t);
   }, []);
+  const s = REEL[i];
   return (
-    <div className="embed">
-      <ScaledScreen step={REEL[i]} />
+    <div className="embed" inert>
+      <ScaledScreen key={i}>{s.page ? <StaticPrototype page={s.page} preset={s.preset} /> : s.render?.()}</ScaledScreen>
     </div>
   );
 }

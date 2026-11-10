@@ -10,7 +10,9 @@ Playable front end of a five-step **air cargo booking flow**: the happy path, in
 
 The demo opens on an **index of every flow**. Pick one and follow it screen by screen:
 
-- Click the **highlighted button** on the screen, use **Next**, or press **← →**.
+- **Every screen is interactive.** Type in the fields, open the dropdowns, toggle the handling chips, attach real files, search bookings, switch tabs and use the menu. Validation, totals, the booking summary and the rate update live.
+- Click the **highlighted button** on the screen, use **Next**, or press **← →** to move through the flow.
+- If you click your way somewhere the flow doesn't cover, you keep exploring the live app, with a link back to the scripted step.
 - The left column lists every screen in the flow and explains what the user sees.
 - **All flows** (or **Esc**) takes you back to the index at any point, so you can try another branch.
 - Every screen has its own link, so you can share an exact step.
@@ -80,21 +82,27 @@ No results, someone else's booking and no connection.
 ## How it's built
 
 - **React 19 + TypeScript**, bundled with **esbuild** into `assets/`, so GitHub Pages serves the repo root with no build step on the server.
-- **Screens** (`src/screens/`) are generated from the design canvas with `tools/convert.py`: every artboard becomes a typed React component with the same props as in the design (for example `<CargoType state="empty" />` or `<Tracking scenario="delay" />`). The canvas stays the single source of truth.
-- **Flows** (`src/flows.tsx`) are plain data: each flow is a list of screens with a label, a note and the button that moves the user forward. Adding a flow means adding an entry, and it shows up in the index automatically.
+- **The live app** (`src/proto/`) is a working version of the booking: real form controls (an accessible dropdown with keyboard support, unit selectors, chips, text areas with a character counter, date picker, file upload), the validation rules and error copy from the case study, a live booking summary and rate, the header search with suggestions, loading, no results, no access and offline, the "Leave this booking?" guard and My bookings filters.
+- **Flows** (`src/flows.tsx`) are plain data: each step opens a page of the live app with a preset of data and state (for example, Step 1 with the invalid values that trigger the error summary). Navigating inside the app moves the flow along when that page is part of it. Adding a flow means adding an entry, and it shows up in the index automatically.
+- **Design screens** (`src/screens/`) are generated from the design canvas with `tools/convert.py`. The tracking screens and two edge cases (flight full, session expired) are shown from there, wired to the menu and tabs.
 - **Routing** uses the URL hash (`#/flow/<id>/<step>`), so every screen has a shareable link and the browser's back button works.
 - `?embed=1` plays an autoplay reel of the key screens, used for the preview in my portfolio.
 
 ```
 src/
-  main.tsx        entry point
-  App.tsx         index of flows, flow player, routing, embed reel
-  flows.tsx       every flow, grouped like the flow map
-  screens/        16 screens generated from the design canvas
-  styles.css      app shell styles
+  main.tsx          entry point
+  App.tsx           index of flows, flow player, routing, embed reel
+  flows.tsx         every flow, grouped like the flow map
+  proto/            the live booking app
+    data.ts         booking data, options, validation rules, rate and search
+    ui.tsx          shell, stepper, fields, dropdown, chips, summary
+    SearchBar.tsx   header search and its states
+    pages/          one page per screen
+  screens/          screens generated from the design canvas
+  styles.css        app shell styles
 tools/
-  build.mjs       esbuild bundle (build and dev server)
-  convert.py      design canvas → React components
+  build.mjs         esbuild bundle (build and dev server)
+  convert.py        design canvas → React components
 ```
 
 ## Run it locally

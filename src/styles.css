@@ -129,3 +129,7 @@ a { color: var(--indigo); }
   .steps a { white-space: nowrap; }
   .bar-title { order: 3; flex-basis: 100%; }
 }
+
+.note.off { border-color: #fedf89; background: #fffaeb; }
+.note.off button { margin-top: 10px; border: 0; background: none; padding: 0; color: var(--indigo); font: 600 14px var(--sans); cursor: pointer; text-align: left; }
+.note.off button:hover { text-decoration: underline; }
