@@ -25,8 +25,9 @@
   position: relative;
 }
 .proto *, .proto *::before, .proto *::after { box-sizing: border-box; }
-.proto button, .proto input, .proto select, .proto textarea { font: inherit; line-height: inherit; color: inherit; }
-.proto button { cursor: pointer; }
+/* :where() keeps the reset at zero specificity, so component classes like .p-btn always win */
+.proto :where(button, input, select, textarea) { font: inherit; line-height: inherit; color: inherit; }
+.proto :where(button) { cursor: pointer; }
 .proto :focus-visible { outline: 3px solid #b9a8ff; outline-offset: 2px; }
 
 /* ---- header ---- */
@@ -145,7 +146,7 @@
 .p-chip { display: flex; align-items: center; gap: 8px; border: 1px solid var(--p-line); background: #fff; color: var(--p-ink); border-radius: 999px; padding: 8px 14px; font-size: 14px; }
 .p-chip:hover { border-color: #a9a7c4; }
 .p-chip[aria-pressed="true"] { border-color: var(--p-indigo); background: var(--p-indigo-soft); color: #2c116f; }
-.p-chip .box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--p-faint); background: #fff; display: flex; align-items: center; justify-content: center; }
+.p-chip .box { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--p-faint); background: #fff; display: flex; align-items: center; justify-content: center; color: #fff; }
 .p-chip[aria-pressed="true"] .box { border-color: var(--p-indigo); background: var(--p-indigo); }
 .p-chip .box svg { opacity: 0; }
 .p-chip[aria-pressed="true"] .box svg { opacity: 1; }
