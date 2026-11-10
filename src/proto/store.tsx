@@ -57,6 +57,13 @@ export type GoOptions = {
   force?: boolean;
 };
 
+export type ToastOptions = {
+  title?: string;
+  tone?: "info" | "success";
+  /** An action such as Undo, shown as a button inside the toast */
+  action?: { label: string; onClick: () => void };
+};
+
 export type ProtoApi = {
   b: Booking;
   ui: Ui;
@@ -65,7 +72,8 @@ export type ProtoApi = {
   set: (patch: Partial<Booking>) => void;
   setUi: (patch: Partial<Ui>) => void;
   go: (page: Page, opts?: GoOptions) => void;
-  toast: (message: string, tone?: "info" | "error") => void;
+  /** Show a toast at the bottom left of the screen */
+  toast: (message: string, opts?: ToastOptions) => void;
 };
 
 export const ProtoContext = createContext<ProtoApi | null>(null);

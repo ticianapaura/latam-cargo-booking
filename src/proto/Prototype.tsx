@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { Booking } from "./data";
 import { EMPTY_STEP1, FILLED } from "./data";
 import { BOOKING_PAGES, INITIAL_UI, ProtoContext } from "./store";
-import type { GoOptions, Page, ProtoApi, Ui } from "./store";
+import type { GoOptions, Page, ProtoApi, ToastOptions, Ui } from "./store";
 import { I, Icon } from "./ui";
 import CargoTypePage from "./pages/CargoTypePage";
 import RoutePage from "./pages/RoutePage";
@@ -43,15 +43,16 @@ type Props = {
 
 /** The live booking app. State is owned by the caller, so a flow can keep it across screens. */
 export function Prototype({ page, booking, ui, onBooking, onUi, onNavigate }: Props) {
-  const [toastMsg, setToast] = useState<{ text: string; tone: "info" | "error" } | null>(null);
+  const [toastMsg, setToast] = useState<(ToastOptions & { text: string; id: number }) | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const bRef = useRef(booking);
   bRef.current = booking;
 
-  const toast = useCallback((text: string, tone: "info" | "error" = "info") => {
-    setToast({ text, tone });
+  const toast = useCallback((text: string, opts: ToastOptions = {}) => {
+    setToast({ text, ...opts, id: Date.now() });
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setToast(null), 3600);
+    // Toasts with an action stay longer, so there's time to use it
+    timer.current = window.setTimeout(() => setToast(null), opts.action ? 6000 : 4000);
   }, []);
   useEffect(() => () => window.clearTimeout(timer.current), []);
 
@@ -119,12 +120,33 @@ export function Prototype({ page, booking, ui, onBooking, onUi, onNavigate }: Pr
             </div>
           </>
         )}
-        {toastMsg && (
-          <div className={`p-toast${toastMsg.tone === "error" ? " error" : ""}`} role="status">
-            <span className="grow">{toastMsg.text}</span>
-            <button type="button" className="x" aria-label="Dismiss" onClick={() => setToast(null)}><Icon d={I.x} size={16} /></button>
-          </div>
-        )}
+        {/* Sticks to the bottom of the visible screen while the page scrolls */}
+        <div className="p-toast-dock" aria-live="polite">
+          {toastMsg && (
+            <div key={toastMsg.id} className={`p-snackbar${toastMsg.tone === "success" ? " success" : ""}`} role="status">
+              {toastMsg.tone === "success" && (
+                <span className="p-snackbar-icon"><Icon d={I.check} size={14} stroke={2.6} /></span>
+              )}
+              <span className="grow">
+                {toastMsg.title && <b>{toastMsg.title}</b>}
+                {toastMsg.text}
+              </span>
+              {toastMsg.action && (
+                <button
+                  type="button"
+                  className="p-snackbar-action"
+                  onClick={() => {
+                    toastMsg.action!.onClick();
+                    setToast(null);
+                  }}
+                >
+                  {toastMsg.action.label}
+                </button>
+              )}
+              <button type="button" className="x" aria-label="Dismiss" onClick={() => setToast(null)}><Icon d={I.x} size={16} /></button>
+            </div>
+          )}
+        </div>
       </div>
     </ProtoContext.Provider>
   );

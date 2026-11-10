@@ -8,7 +8,7 @@ const ACCEPT = [".pdf", ".jpg", ".jpeg", ".png"];
 
 /** Step 3 · Documents. Attach real files from your computer: type and size are checked like in production. */
 export default function DocumentsPage() {
-  const { b, set, ui, setUi, go } = useProto();
+  const { b, set, ui, setUi, go, toast } = useProto();
   const [progress, setProgress] = useState<Partial<Record<DocId, number>>>({});
   const inputs = useRef<Partial<Record<DocId, HTMLInputElement | null>>>({});
   const submitted = !!ui.submitted.step3;
@@ -41,6 +41,17 @@ export default function DocumentsPage() {
   };
   const bRef = useRef(b);
   bRef.current = b;
+
+  const remove = (id: DocId) => {
+    const file = b.docs[id];
+    const doc = DOCS.find((d) => d.id === id)!;
+    set({ docs: { ...b.docs, [id]: null } });
+    toast(`${file?.name} was removed${doc.optional ? "." : ". Attach it again before you continue."}`, {
+      title: `${doc.name} deleted`,
+      tone: "success",
+      action: { label: "Undo", onClick: () => set({ docs: { ...bRef.current.docs, [id]: file } }) },
+    });
+  };
 
   const save = () => {
     if (Object.keys(all).length) {
@@ -108,7 +119,7 @@ export default function DocumentsPage() {
                         }}
                       />
                       {f && !f.error && up === undefined && (
-                        <button type="button" className="p-link" onClick={() => set({ docs: { ...b.docs, [d.id]: null } })}>Remove</button>
+                        <button type="button" className="p-link" onClick={() => remove(d.id)} aria-label={`Remove ${d.name}`}>Remove</button>
                       )}
                       {up === undefined && (!f || f.error) && (
                         <button type="button" id={d.id} className="p-btn secondary sm" onClick={() => inputs.current[d.id]?.click()}>
