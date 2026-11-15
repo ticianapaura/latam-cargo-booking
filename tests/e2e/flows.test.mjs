@@ -351,7 +351,7 @@ describe("agent path", () => {
     await page.waitForSelector(".a-block.ok");
     assert.equal(await status(page), "Booked");
     assert.match(await page.innerText(".a-block.ok"), /Booked #\d+ · AWB 000-\d{8}/);
-    assert.match(await page.innerText(".a-plan .a-count"), /9 of 9 steps done/);
+    assert.match(await page.innerText(".a-plan .a-count"), /All 9 steps done/);
     // Technical detail stays secondary: the log is closed until asked for
     assert.equal(await page.locator("details.a-log[open]").count(), 0);
     await page.click(".a-panel button:has-text('Activity log')");
@@ -597,6 +597,61 @@ describe("agent path · option cards", () => {
     await details(page);
     assert.equal(await page.locator(".a-option.sel.rec").count(), 1);
     assert.match(await page.innerText(".a-option.sel .a-option-badges"), /Selected/);
+    await page.close();
+  });
+});
+
+describe("agent path · review fixes", () => {
+  test("cancelled: progress says it stopped, in grey, the same in the plan and the panel", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await page.click(".a-panel button:has-text('Cancel plan')");
+    await page.click(".a-confirm button:has-text('Cancel plan')");
+    const plan = await page.innerText(".a-plan .a-count");
+    assert.match(plan, /^Cancelled after \d of 9 steps$/);
+    assert.equal(await page.innerText(".a-progress span"), plan);
+    assert.equal(await page.locator(".a-progress.mute").count(), 1);
+    assert.doesNotMatch(await page.innerText(".a-panel"), /steps done/);
+    await page.close();
+  });
+
+  test("the details count is the same in the read card and in Read your goal", async () => {
+    const { page } = await openAgent();
+    await page.click("button.p-chip:has-text('Salmon to São Paulo')");
+    await page.click("button:has-text('Start planning')");
+    await page.waitForSelector("text=Which airport?");
+    await page.click(".a-task-group button:has-text('Show steps')").catch(() => {});
+    const card = (await page.innerText(".a-read .a-count")).match(/(\d+) from your message/)[1];
+    const step = (await page.innerText(".a-plan")).match(/Read (\d+) of the 17 details from your message/)[1];
+    assert.equal(card, step);
+    await page.close();
+  });
+
+  test("approving says it books right away, and the button says so", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await details(page);
+    assert.match(await page.innerText(".a-consequence"), /authorizes CargoPilot to book proposal v1 right away, for USD 1,159.13/);
+    assert.equal(await page.locator("button:has-text('Approve and book now')").getAttribute("aria-describedby"), "approve-means");
+    await page.close();
+  });
+
+  test("finished steps collapse into one line; the panel's step list jumps to any step", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await details(page);
+    assert.match(await page.innerText(".a-task-group"), /5 steps done/);
+    assert.equal(await page.locator(".a-task:not([hidden]) .a-task-label:has-text('Search available flights')").count(), 0);
+    assert.equal(await page.locator(".a-stepnav li").count(), 9);
+    assert.equal(await page.locator(".a-stepnav li.needs_user").count(), 1);
+    await page.click(".a-stepnav button:has-text('Search available flights')");
+    await page.waitForSelector(".a-task-label:has-text('Search available flights')");
+    assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Search available flights");
+    await page.click("button:has-text('Group the finished steps again')");
+    assert.equal(await page.locator(".a-task-group").count(), 1);
     await page.close();
   });
 });

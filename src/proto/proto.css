@@ -520,3 +520,24 @@
 .a-log-list li.t-denied .a-log-what, .a-log-list li.t-tool_error .a-log-what { color: var(--p-error); }
 .a-log-list li.t-invalidation .a-log-what { color: var(--a-blue-ink); }
 .a-log-list li.t-approval .a-log-what { color: var(--p-ok); }
+
+/* review: progress tone, consequence of approving, grouped history, step list */
+.a-progress.mute .a-progress-bar i { background: var(--p-faint); }
+.a-progress.bad .a-progress-bar i { background: var(--p-error-line); }
+.a-consequence { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--p-indigo-soft); color: #2c116f; font-size: 14px; line-height: 1.45; }
+.a-consequence svg { flex: none; margin-top: 2px; }
+.a-consequence b { font-weight: 600; }
+.a-task-group .a-task-label { font-weight: 600; }
+.a-task-collapse { list-style: none; margin: -6px 0 10px 40px; }
+.a-task-label:focus { outline: none; }
+.a-task-label:focus-visible { outline: 3px solid #b9a8ff; outline-offset: 2px; border-radius: 4px; }
+.a-stepnav { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.a-stepnav button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 4px 6px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13.5px; color: var(--p-muted); }
+.a-stepnav button:hover { background: #fff; color: var(--p-ink); }
+.a-stepnav i { width: 10px; height: 10px; flex: none; border-radius: 50%; border: 2px solid var(--p-line); background: #fff; }
+.a-stepnav .done i { border-color: #17b26a; background: #17b26a; }
+.a-stepnav .running i { border-color: var(--p-indigo); background: var(--p-indigo-soft); }
+.a-stepnav .needs_user i, .a-stepnav .needs_manager i { border-color: #f79009; background: #f79009; }
+.a-stepnav .blocked i, .a-stepnav .failed i, .a-stepnav .unknown i { border-color: var(--p-error-line); background: var(--p-error-line); }
+.a-stepnav .needs_user span, .a-stepnav .needs_manager span, .a-stepnav .blocked span, .a-stepnav .failed span, .a-stepnav .unknown span, .a-stepnav .running span { color: var(--p-ink); font-weight: 600; }
+.a-stepnav .skipped span { text-decoration: line-through; }

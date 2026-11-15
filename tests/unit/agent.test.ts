@@ -663,3 +663,86 @@ test("the interpreter: full description, ordinal dates, no handling invented fro
   assert.equal(agent.state.constraints.budgetUsd, undefined);
   assert.match(agent.state.warnings?.[0] ?? "", /EUR.*only USD/);
 });
+
+/* ---------- review: restrictions re-validated on every change; unknown status never re-books ---------- */
+
+test("blocked: fixing one of two restrictions re-checks and stays blocked; no search until both are fixed", async () => {
+  const { agent } = setup();
+  await agent.submitGoal("Ship 2 crates of machinery, 1200 kg each, 100x100x100 cm, from Mendoza to MIA, pick up on Nov 12");
+  assert.deepEqual(agent.state.restrictions.map((r) => r.code).sort(), ["DOMESTIC_ONLY_AIRPORT", "PIECE_TOO_HEAVY"]);
+  const checks = () => calls(agent, "checkCargoRestrictions").length;
+  const before = checks();
+  // Fix the weight only: restrictions are checked again, the airport still blocks, nothing is searched
+  await agent.setFields([["pieces", 4], ["weightPerPiece", 600]], "edit");
+  assert.equal(checks(), before + 1);
+  assert.equal(agent.state.status, "blocked");
+  assert.deepEqual(agent.state.restrictions.map((r) => r.code), ["DOMESTIC_ONLY_AIRPORT"]);
+  assert.equal(calls(agent, "searchAvailableFlights").length, 0);
+  // Fix the airport (the one-click suggestion goes through the same path): checked again, then validated, then searched
+  await agent.applySuggestion("DOMESTIC_ONLY_AIRPORT");
+  assert.equal(checks(), before + 2);
+  const order = calls(agent).map((l) => l.tool);
+  const last = order.lastIndexOf("checkCargoRestrictions");
+  assert.ok(order.indexOf("validateShipment", last) > last, "validated after the last restriction check");
+  assert.ok(order.indexOf("searchAvailableFlights") > order.indexOf("validateShipment", last), "searched only after validating");
+  // An edit that breaks a limit again blocks again, even with options already on screen
+  await agent.setField("dims", { h: 300, w: 100, l: 100 }, "edit");
+  assert.equal(agent.state.status, "blocked");
+  assert.equal(agent.state.restrictions[0].code, "PIECE_TOO_TALL");
+});
+
+test("status unknown: Check the status again only queries the same booking key; confirm is never called again", async () => {
+  const { agent, api, ledger } = setup({ faults: { confirmTimeout: "booked", statusFailures: 9 } });
+  let confirms = 0;
+  const statusKeys: string[] = [];
+  const confirm = api.confirm.bind(api);
+  const status = api.status.bind(api);
+  api.confirm = (i) => (confirms++, confirm(i));
+  api.status = (k) => (statusKeys.push(k), status(k));
+  await agent.submitGoal(SALMON);
+  await details(agent);
+  await agent.approve();
+  assert.equal(agent.state.status, "status_unknown");
+  assert.equal(confirms, 1);
+  const key = agent.state.idempotencyKey!;
+  // The user presses Check the status again twice while the status service is still down
+  await agent.retry();
+  await agent.retry();
+  assert.equal(agent.state.status, "status_unknown");
+  assert.equal(confirms, 1, "never re-sent while the status is unknown");
+  assert.ok(statusKeys.length >= 6 && statusKeys.every((k) => k === key), "every check asks about the same operation");
+  // Nothing else can move it while unknown
+  await agent.setField("pieces", 3);
+  agent.cancel();
+  agent.reset();
+  await agent.approve();
+  assert.equal(agent.state.status, "status_unknown");
+  assert.equal(confirms, 1);
+  // The status service comes back: the same key finds the booking that went through
+  api.faults.statusFailures = 0;
+  await agent.retry();
+  assert.equal(agent.state.status, "confirmed");
+  assert.equal(confirms, 1);
+  assert.equal(ledger.count(), 1);
+  assert.equal(agent.state.booking!.idempotencyKey, key);
+});
+
+test("a changed price always needs a new approval; the same price after a re-quote keeps it", async () => {
+  const { agent, api, clock } = setup();
+  await agent.submitGoal(SALMON);
+  await details(agent);
+  // Same price, renewed quote: the approval of v1 still books v1
+  clock.advance(20 * MIN);
+  await agent.approve();
+  assert.equal(agent.state.booking!.version, 1);
+  // A new plan: the price moves, so the approval is void and nothing is booked until approved again
+  const b = setup();
+  await b.agent.submitGoal(SALMON);
+  await details(b.agent);
+  b.api.faults.priceIncreasePct = 5;
+  await b.agent.approve();
+  assert.equal(b.agent.state.status, "awaiting_approval");
+  assert.equal(b.ledger.count(), 0);
+  assert.equal(b.agent.state.proposal!.version, 2);
+  void api;
+});

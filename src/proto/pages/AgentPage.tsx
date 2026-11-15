@@ -86,6 +86,37 @@ const BLANK: Booking = {
 const isBusy = (st: AgentState) => st.status === "booking" || st.status === "status_unknown";
 const locked = (st: AgentState) => isBusy(st) || st.status === "confirmed";
 
+/** One progress reading for the plan and the panel. A stopped plan keeps its history but doesn't read as moving. */
+export function progress(st: AgentState, tasks: Task[]) {
+  const done = tasks.filter((t) => t.status === "done").length;
+  const n = tasks.length;
+  const stopped: Partial<Record<AgentStatus, string>> = {
+    cancelled: `Cancelled after ${done} of ${n} steps`,
+    blocked: `Stopped at ${done} of ${n} steps until the shipment changes`,
+    handoff: `Stopped at ${done} of ${n} steps: continues in the form`,
+    failed: `Stopped at ${done} of ${n} steps until you retry`,
+    paused: `Paused at ${done} of ${n} steps`,
+    status_unknown: `${done} of ${n} steps done · booking status unknown`,
+  };
+  const label = st.status === "confirmed" ? `All ${n} steps done` : stopped[st.status] ?? `${done} of ${n} steps done`;
+  const tone = st.status === "cancelled" ? "mute" : ["blocked", "failed", "status_unknown"].includes(st.status) ? "bad" : st.status === "paused" || st.status === "handoff" ? "mute" : "ok";
+  return { done, n, label, tone };
+}
+
+/** One count of the details, for the read card and the "Read your goal" step: same keys, same categories */
+export function detailCounts(st: AgentState) {
+  const keys = GROUPS.flatMap((g) => g.keys);
+  const c = { total: keys.length, message: 0, you: 0, defaults: 0, missing: 0 };
+  for (const k of keys) {
+    const tone = source(st, k).tone;
+    if (tone === "you") c.you++;
+    else if (tone === "missing") c.missing++;
+    else if (tone === "default" && k === "priority" && !st.constraints.priority) c.defaults++;
+    else c.message++;
+  }
+  return c;
+}
+
 /* ---------- the page ---------- */
 
 export default function AgentPage() {
@@ -96,6 +127,17 @@ export default function AgentPage() {
   const manager = s.role === "manager";
   const [logOpen, setLogOpen] = useState(false);
   const logRef = useRef<HTMLDetailsElement>(null);
+  // Finished automatic steps are grouped into one line; the panel's step list can open them and jump to any step
+  const [showDone, setShowDone] = useState(false);
+  const taskRefs = useRef<Partial<Record<TaskId, HTMLLIElement | null>>>({});
+  const jump = (id: TaskId) => {
+    setShowDone(true);
+    window.setTimeout(() => {
+      const el = taskRefs.current[id];
+      el?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      el?.querySelector<HTMLElement>(".a-task-label")?.focus();
+    }, 30);
+  };
 
   const toForm = () => {
     const data = a.handoff();
@@ -146,12 +188,12 @@ export default function AgentPage() {
                   )}
                 </div>
               )}
-              <Plan agent={a} manager={manager} onForm={toForm} onManagerView={() => s.setRole("manager")} />
+              <Plan agent={a} manager={manager} onForm={toForm} onManagerView={() => s.setRole("manager")} showDone={showDone} setShowDone={setShowDone} refs={taskRefs} />
             </>
           )}
           <ActivityLog st={st} open={logOpen} onToggle={setLogOpen} innerRef={logRef} />
         </div>
-        <Panel agent={a} manager={manager} onForm={toForm} onLog={openLog} />
+        <Panel agent={a} manager={manager} onForm={toForm} onLog={openLog} onJump={jump} />
       </div>
     </Shell>
   );
@@ -269,9 +311,7 @@ function GoalCard({ agent, readOnly }: { agent: Agent; readOnly: boolean }) {
 
 function ReadCard({ agent, readOnly }: { agent: Agent; readOnly: boolean }) {
   const st = agent.state;
-  const keys = GROUPS.flatMap((g) => g.keys);
-  const known = keys.filter((k) => show(st, k) && source(st, k).tone !== "missing").length;
-  const missingCount = keys.filter((k) => source(st, k).tone === "missing").length;
+  const cnt = detailCounts(st);
   // A summary line by default, so questions stay in view; opened on demand to check or correct anything
   const [isOpen, setOpen] = useState(false);
   const disabled = readOnly ? "manager" : locked(st) ? "locked" : undefined;
@@ -292,7 +332,10 @@ function ReadCard({ agent, readOnly }: { agent: Agent; readOnly: boolean }) {
     <section className="a-card a-read" aria-labelledby="read-title">
       <div className="a-row-between">
         <h2 id="read-title" className="a-h2">
-          What CargoPilot read <span className="a-count">{known} of {keys.length} details{missingCount ? ` · ${missingCount} missing` : ""}</span>
+          What CargoPilot read{" "}
+          <span className="a-count">
+            {cnt.total} details: {cnt.message} from your message{cnt.you ? ` · ${cnt.you} from you` : ""}{cnt.defaults ? ` · ${cnt.defaults} default` : ""}{cnt.missing ? ` · ${cnt.missing} missing` : ""}
+          </span>
         </h2>
         <button type="button" className="a-change" aria-expanded={isOpen} aria-controls="read-body" onClick={() => setOpen(!isOpen)}>
           {isOpen ? "Hide details" : "Show and correct"}
@@ -330,7 +373,7 @@ function ReadCard({ agent, readOnly }: { agent: Agent; readOnly: boolean }) {
 
 /* ---------- 3 · the plan, with each task's content under it ---------- */
 
-function Plan({ agent, manager, onForm, onManagerView }: { agent: Agent; manager: boolean; onForm: () => void; onManagerView: () => void }) {
+function Plan({ agent, manager, onForm, onManagerView, showDone, setShowDone, refs }: { agent: Agent; manager: boolean; onForm: () => void; onManagerView: () => void; showDone: boolean; setShowDone: (v: boolean) => void; refs: { current: Partial<Record<TaskId, HTMLLIElement | null>> } }) {
   const st = agent.state;
   const tasks = agent.plan();
   const [open, setOpen] = useState<Set<TaskId>>(new Set());
@@ -340,10 +383,9 @@ function Plan({ agent, manager, onForm, onManagerView }: { agent: Agent; manager
   const view = (t: Task): Task["status"] => (t.id === "restrictions" && st.status === "handoff" ? "needs_user" : t.status);
   const focus = tasks.find((t) => ["running", "needs_user", "needs_manager", "blocked", "failed", "unknown"].includes(view(t)))?.id ?? (st.booking ? "confirm" : undefined);
   const firstPending = tasks.find((t) => view(t) === "pending")?.id;
-  const done = tasks.filter((t) => view(t) === "done").length;
+  const prog = progress(st, tasks);
 
   // Bring the step that needs the user into view when the agent stops there
-  const refs = useRef<Partial<Record<TaskId, HTMLLIElement | null>>>({});
   const waiting = ["needs_user", "needs_manager", "awaiting_approval", "blocked", "handoff", "failed", "status_unknown", "confirmed"].includes(st.status);
   useEffect(() => {
     if (!waiting) return;
@@ -370,36 +412,65 @@ function Plan({ agent, manager, onForm, onManagerView }: { agent: Agent; manager
     <section className="a-card a-plan" aria-labelledby="plan-title">
       <div className="a-row-between">
         <h2 id="plan-title" className="a-h2">The plan</h2>
-        <span className="a-count">{done} of {tasks.length} steps done</span>
+        <span className="a-count">{prog.label}</span>
       </div>
       <ol className="a-tasks">
-        {tasks.map((t) => {
-          const status = view(t);
-          const body = taskBody(t.id, { agent, manager, onForm, onManagerView, questions: home(t.id) });
-          const isOpen = open.has(t.id);
-          const log = lastLog(st, t.id);
-          return (
-            <li key={t.id} ref={(el) => { refs.current[t.id] = el; }} className={`a-task ${status}`} aria-current={t.id === focus ? "step" : undefined}>
-              <span className="a-task-icon" aria-hidden="true">{taskIcon(status)}</span>
-              <div className="a-task-main">
-                <div className="a-task-head">
-                  <span className="a-task-label">{t.label}</span>
-                  <Tag level={t.level} />
-                  {t.id === firstPending && status === "pending" && <span className="a-next">Next</span>}
-                  <span className="a-task-state">{stateText(status, t, st)}</span>
-                  {log && (
-                    <button type="button" className="a-change" aria-expanded={isOpen} onClick={() => toggle(t.id)}>
-                      {isOpen ? "Hide details" : "Details"}
-                    </button>
-                  )}
+        {(() => {
+          // Finished steps with nothing left to show collapse into one line while they're the history at the top
+          const rows = tasks.map((t) => ({ t, status: view(t), body: taskBody(t.id, { agent, manager, onForm, onManagerView, questions: home(t.id) }) }));
+          let lead = 0;
+          while (lead < rows.length && rows[lead].status === "done" && !rows[lead].body && rows[lead].t.id !== focus) lead++;
+          const group = lead >= 2 && !showDone ? rows.slice(0, lead) : [];
+          const render = ({ t, status, body }: (typeof rows)[0]) => {
+            const isOpen = open.has(t.id);
+            const log = lastLog(st, t.id);
+            return (
+              <li key={t.id} ref={(el) => { refs.current[t.id] = el; }} className={`a-task ${status}`} aria-current={t.id === focus ? "step" : undefined}>
+                <span className="a-task-icon" aria-hidden="true">{taskIcon(status)}</span>
+                <div className="a-task-main">
+                  <div className="a-task-head">
+                    <span className="a-task-label" tabIndex={-1}>{t.label}</span>
+                    <Tag level={t.level} />
+                    {t.id === firstPending && status === "pending" && <span className="a-next">Next</span>}
+                    <span className="a-task-state">{stateText(status, t, st)}</span>
+                    {log && (
+                      <button type="button" className="a-change" aria-expanded={isOpen} onClick={() => toggle(t.id)}>
+                        {isOpen ? "Hide details" : "Details"}
+                      </button>
+                    )}
+                  </div>
+                  {status !== "pending" && status !== "skipped" && <TaskResult t={t} st={st} status={status} />}
+                  {isOpen && log && <ToolDetails st={st} t={t} />}
+                  {body}
                 </div>
-                {status !== "pending" && status !== "skipped" && <TaskResult t={t} st={st} status={status} />}
-                {isOpen && log && <ToolDetails st={st} t={t} />}
-                {body}
-              </div>
-            </li>
+              </li>
+            );
+          };
+          return (
+            <>
+              {group.length > 0 && (
+                <li className="a-task done a-task-group">
+                  <span className="a-task-icon" aria-hidden="true">{taskIcon("done")}</span>
+                  <div className="a-task-main">
+                    <div className="a-task-head">
+                      <span className="a-task-label">{group.length} steps done</span>
+                      <span className="a-task-state">{group.every((r) => r.t.level === "L3") ? "on their own" : ""}</span>
+                      <button type="button" className="a-change" aria-expanded={false} onClick={() => setShowDone(true)}>Show steps</button>
+                    </div>
+                    <p className="a-task-result">{group.map((r) => r.t.label).join(" · ")}</p>
+                  </div>
+                </li>
+              )}
+              {group.length > 0 && rows.slice(0, lead).map((r) => <li key={r.t.id} hidden ref={(el) => { refs.current[r.t.id] = el; }} />)}
+              {rows.slice(group.length).map(render)}
+              {showDone && lead >= 2 && (
+                <li className="a-task-collapse">
+                  <button type="button" className="a-change" onClick={() => setShowDone(false)}>Group the finished steps again</button>
+                </li>
+              )}
+            </>
           );
-        })}
+        })()}
       </ol>
     </section>
   );
@@ -436,8 +507,8 @@ function stateText(status: Task["status"], t: Task, st: AgentState) {
 function TaskResult({ t, st, status }: { t: Task; st: AgentState; status: Task["status"] }) {
   let text = "";
   if (t.id === "interpret") {
-    const n = GROUPS.flatMap((g) => g.keys).filter((k) => ["read", "default"].includes(source(st, k).tone) && show(st, k) && !(k === "priority" && !st.constraints.priority)).length;
-    text = `Read ${n} of the ${GROUPS.flatMap((g) => g.keys).length} details from your message, with fixed rules.`;
+    const cnt = detailCounts(st);
+    text = `Read ${cnt.message} of the ${cnt.total} details from your message, with fixed rules.`;
   } else if (t.id === "approval") {
     const ap = currentApproval(st, "booking");
     if (ap) text = `Approved by you at ${fmtClock(ap.at)} · proposal v${ap.version}.`;
@@ -876,14 +947,22 @@ function Approval({ c }: { c: Ctx }) {
           </div>
         </form>
       ) : (
-        <div className="a-row-between">
-          <button type="button" className="p-btn secondary md" onClick={() => setRejecting(true)}>Reject</button>
-          <button type="button" className="p-btn" disabled={!ready} onClick={() => void c.agent.approve("coordinator", [...accepted])}>
-            Approve and book · {usd(p.option.quote.total)}
-          </button>
-        </div>
+        <>
+          <p className="a-consequence" id="approve-means">
+            <Icon d={I.info} size={16} />
+            <span>
+              <b>Approving authorizes CargoPilot to book proposal v{p.version} right away, for {usd(p.option.quote.total)}.</b> The booking is sent as soon as you click; once it's confirmed it can't be undone here.
+            </span>
+          </p>
+          <div className="a-row-between">
+            <button type="button" className="p-btn secondary md" onClick={() => setRejecting(true)}>Reject</button>
+            <button type="button" className="p-btn" disabled={!ready} aria-describedby="approve-means" onClick={() => void c.agent.approve("coordinator", [...accepted])}>
+              Approve and book now · {usd(p.option.quote.total)}
+            </button>
+          </div>
+        </>
       )}
-      <p className="p-help">Approving books this exact version (v{p.version}). If the price or the flight changes before it's booked, CargoPilot asks you again.</p>
+      <p className="p-help">If the price or the flight changes before the booking goes through, nothing is booked: CargoPilot shows you what changed and asks for your approval again.</p>
     </div>
   );
 }
@@ -1033,12 +1112,12 @@ function Cancelled({ agent, onForm }: { agent: Agent; onForm: () => void }) {
 
 /* ---------- the panel: status, progress, approvals, controls ---------- */
 
-function Panel({ agent, manager, onForm, onLog }: { agent: Agent; manager: boolean; onForm: () => void; onLog: () => void }) {
+function Panel({ agent, manager, onForm, onLog, onJump }: { agent: Agent; manager: boolean; onForm: () => void; onLog: () => void; onJump: (id: TaskId) => void }) {
   const s = agentSession();
   const st = agent.state;
   const meta = STATUS[st.status];
   const tasks = agent.plan();
-  const done = tasks.filter((t) => t.status === "done").length;
+  const prog = progress(st, tasks);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const p = st.proposal;
   const approvals: { text: string; who: string; state: string }[] = [];
@@ -1065,10 +1144,11 @@ function Panel({ agent, manager, onForm, onLog }: { agent: Agent; manager: boole
       </div>
       {st.status !== "idle" && (
         <>
-          <div className="a-progress" aria-label={`${done} of ${tasks.length} steps done`}>
-            <div className="a-progress-bar"><i style={{ width: `${(done / tasks.length) * 100}%` }} /></div>
-            <span>{done} of {tasks.length} steps done</span>
+          <div className={`a-progress ${prog.tone}`} aria-label={prog.label}>
+            <div className="a-progress-bar"><i style={{ width: `${(prog.done / prog.n) * 100}%` }} /></div>
+            <span>{prog.label}</span>
           </div>
+          <StepNav tasks={tasks} st={st} onJump={onJump} />
           <hr />
           <h4>Booked</h4>
           <p className="a-panel-line">{st.booking ? <><b>{st.booking.bookingId}</b> · AWB {st.booking.awb}</> : st.status === "status_unknown" ? "Unknown: being checked" : "Nothing yet"}</p>
@@ -1121,6 +1201,24 @@ function Panel({ agent, manager, onForm, onLog }: { agent: Agent; manager: boole
       <p className="a-mocknote"><b>Mock mode.</b> {MOCK_LABEL.replace("Mock mode: ", "CargoPilot is ")}. Flights, prices and bookings are synthetic.</p>
       <Simulations />
     </aside>
+  );
+}
+
+/** The plan's steps in the panel: where each one stands, and a way to jump to it */
+function StepNav({ tasks, st, onJump }: { tasks: Task[]; st: AgentState; onJump: (id: TaskId) => void }) {
+  return (
+    <nav aria-label="Steps of the plan">
+      <ol className="a-stepnav">
+        {tasks.map((t) => (
+          <li key={t.id} className={t.status}>
+            <button type="button" onClick={() => onJump(t.id)} aria-label={`${t.label}: ${stateText(t.status, t, st) || t.status.replace("_", " ")}`}>
+              <i aria-hidden="true" />
+              <span>{t.label}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
