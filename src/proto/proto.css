@@ -459,7 +459,7 @@
 .a-changes ul { margin: 4px 0; padding-left: 18px; }
 .a-kv { background: var(--p-panel); border-radius: 8px; padding: 14px 16px; }
 .a-price-row { display: flex; align-items: baseline; gap: 12px; font-size: 15px; }
-.a-price-row b { font-size: 22px; font-weight: 600; margin-right: auto; }
+.a-price-row b { font-size: 22px; font-weight: 600; margin-right: auto; white-space: nowrap; }
 .a-accept { padding: 12px 14px; border-radius: 8px; background: var(--a-amber-bg); border: 1px solid var(--a-amber-line); color: var(--a-amber-ink); }
 .a-conditions { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--p-muted); display: flex; flex-direction: column; gap: 2px; }
 .a-reject { display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
