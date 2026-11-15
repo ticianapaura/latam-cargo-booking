@@ -124,7 +124,7 @@ export const INVALID_STEP1: Partial<Booking> = {
   length: "60",
   handling: ["Chilled 2–8 °C", "Frozen −18 °C"],
   instructions:
-    "Keep the cold chain at all times. The consignee receives Monday to Friday, 8 AM to 5 PM; outside those hours, coordinate with site security first.",
+    "Keep the cold chain at all times. The consignee receives Monday to Friday, 8 AM to 5 PM; outside those hours, coordinate with site security first. Call the site supervisor ahead of arrival.",
 };
 
 /** The values behind the "Step 2 with errors" screen of the case study */

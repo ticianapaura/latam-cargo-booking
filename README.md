@@ -113,6 +113,18 @@ npm run dev        # http://localhost:5173
 npm run build      # writes assets/app.js and assets/app.css
 ```
 
+## Tests
+
+```bash
+npm test             # both suites
+npm run test:unit    # booking rules: validation, limits, rate, search (Node's test runner)
+npm run test:e2e     # builds, then opens every step of all 16 flows in Chromium (Playwright)
+```
+
+The end-to-end suite needs Chromium once: `npx playwright install chromium`. It opens the built site straight from disk, so no server is needed.
+
+What it covers: every step of every flow opens without errors and highlights the button its note mentions; Next, Previous and the arrow keys; the Step 1 dropdown with mouse and keyboard, totals, errors that clear and Save and continue; the designed error states of Steps 1 and 2; attaching, rejecting and removing documents with Undo; accepting terms and Edit on Review; the leave dialog and the draft it keeps; search suggestions, no results, no access and exact match; tracking tabs; and the portfolio preview.
+
 ## Credits
 
 Design and front end by [Ticiana Paura](https://ticianapaura.github.io/). Typefaces: Archivo and IBM Plex (Google Fonts).
