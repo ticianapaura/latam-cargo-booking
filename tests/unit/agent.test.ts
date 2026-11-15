@@ -556,3 +556,37 @@ test("the same goal with different data takes a different path", async () => {
   await b.submitGoal("Ship 2 dogs, 20 kg each, 60x50x80 cm, from EZE to MIA, pick up on Nov 12");
   assert.notDeepEqual(calls(a).map((l) => l.tool), calls(b).map((l) => l.tool));
 });
+
+test("several answers at once re-plan once", async () => {
+  const { agent } = setup();
+  await agent.submitGoal("Ship 10 boxes of fresh salmon, 25 kg each, from Buenos Aires to GRU");
+  const before = calls(agent, "validateShipment").length;
+  await agent.setFields([["originAirport", "EZE"], ["dims", { h: 35, w: 40, l: 60 }], ["pickupDate", "2026-11-11"]]);
+  assert.equal(calls(agent, "validateShipment").length, before + 1);
+  assert.equal(calls(agent, "searchAvailableFlights").length, 1);
+});
+
+test("status unknown: Cancel, edits and Start over are refused until the status is known", async () => {
+  const { agent } = setup({ faults: { confirmTimeout: "booked", statusFailures: 3 } });
+  await agent.submitGoal(SALMON);
+  await details(agent);
+  await agent.approve();
+  assert.equal(agent.state.status, "status_unknown");
+  agent.cancel();
+  await agent.setField("pieces", 3);
+  agent.reset();
+  assert.equal(agent.state.status, "status_unknown");
+  assert.equal(types(agent, "denied").length, 3);
+});
+
+test("the plan shows which task is running", async () => {
+  const { agent } = setup({ delayMs: 5 });
+  const seen = new Set<string>();
+  agent.subscribe(() => {
+    const t = agent.plan().find((x) => x.status === "running");
+    if (t) seen.add(t.id);
+  });
+  await agent.submitGoal(SALMON);
+  for (const id of ["validate", "restrictions", "search", "rates", "compare"]) assert.ok(seen.has(id), id);
+  assert.ok(!agent.plan().some((x) => x.status === "running"), "nothing running once it stops");
+});

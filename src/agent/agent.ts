@@ -20,7 +20,7 @@ import type {
   AgentState, AgentStatus, Approval, Constraints, Field, Flight, LogEntry, Option, Proposal, Question, Quote, Role, Shipment, ShipmentKey, Task, TaskId, ToolName,
 } from "./types.ts";
 import type { Clock } from "./util.ts";
-import { hash, iso, sleep, stable } from "./util.ts";
+import { hash, iso, money, sleep, stable, when } from "./util.ts";
 
 export const STORE_KEY = "cargopilot.agent.v1";
 const MAX_ATTEMPTS = 3; // a read-only tool is tried up to 3 times before the task is marked Failed
@@ -28,7 +28,7 @@ const MAX_ATTEMPTS = 3; // a read-only tool is tried up to 3 times before the ta
 export type Deps = { api: MockCarrierApi; ledger: BookingLedger; store: GuardedStore; clock: Clock; interpreter?: Interpreter; delayMs?: number };
 
 type Memo = Partial<Record<"validate" | "restrictions" | "search" | "rates" | "compare" | "draft", string>>;
-type Internal = AgentState & { memo: Memo; forceNewVersion?: string; ambiguous: { field: ShipmentKey; codes: string[] }[] };
+type Internal = AgentState & { memo: Memo; forceNewVersion?: string; ambiguous: { field: ShipmentKey; codes: string[] }[]; currentTool?: ToolName };
 
 export function initialState(id = "A-" + Date.now().toString(36)): Internal {
   return {
@@ -92,24 +92,36 @@ export class Agent {
 
   /** An answer to a question, or a correction of any field. Re-plans from the first task it affects. */
   async setField(key: ShipmentKey | keyof Constraints, value: unknown, kind: "answer" | "edit" = "edit") {
+    return this.setFields([[key, value]], kind);
+  }
+
+  /** Several answers at once (e.g. the questions of one block): applied together, then one re-plan */
+  async setFields(entries: [ShipmentKey | keyof Constraints, unknown][], kind: "answer" | "edit" = "answer") {
     const st = this.state;
     if (st.status === "booking") return this.deny("setField", "A booking is being confirmed; changes wait until it finishes.");
+    if (st.status === "status_unknown") return this.deny("setField", "It isn't known yet whether the booking went through; check its status before changing anything.");
     if (st.status === "confirmed") return this.deny("setField", "This booking is confirmed; changing it needs a new approval (not supported in this prototype).");
-    const f: Field<unknown> = { value, source: "user" };
-    if (key === "deadline" || key === "budgetUsd" || key === "priority") (st.constraints as Record<string, unknown>)[key] = f;
-    else (st.shipment as Record<string, unknown>)[key] = f;
-    st.ambiguous = st.ambiguous.filter((a) => a.field !== key);
-    // A total weight read earlier becomes a per-piece weight once the number of pieces is known
-    if (key === "pieces" && st.shipment.totalWeight && !st.shipment.weightPerPiece) {
-      st.shipment.weightPerPiece = { value: Math.round((st.shipment.totalWeight.value / Number(value)) * 100) / 100, source: "message" };
+    for (const [key, value] of entries) {
+      const f: Field<unknown> = { value, source: "user" };
+      if (key === "deadline" || key === "budgetUsd" || key === "priority") (st.constraints as Record<string, unknown>)[key] = f;
+      else (st.shipment as Record<string, unknown>)[key] = f;
+      st.ambiguous = st.ambiguous.filter((a) => a.field !== key);
+      // A total weight read earlier becomes a per-piece weight once the number of pieces is known
+      if (key === "pieces" && st.shipment.totalWeight && !st.shipment.weightPerPiece) {
+        st.shipment.weightPerPiece = { value: Math.round((st.shipment.totalWeight.value / Number(value)) * 100) / 100, source: "message" };
+      }
+      this.log("user", kind, `${LABELS[key]}: ${describe(key, value)}`);
     }
-    this.log("user", kind, `${LABELS[key]}: ${describe(key, value)}`);
-    if (st.status === "paused") return this.save();
-    if (["blocked", "needs_user", "failed", "handoff", "needs_manager", "awaiting_approval", "idle", "cancelled"].includes(st.status)) {
-      if (st.status === "cancelled" || st.status === "idle") return this.save();
-      return this.run();
-    }
-    return this.save();
+    if (st.status === "paused" || st.status === "cancelled" || st.status === "idle") return this.save();
+    return this.run();
+  }
+
+  /** Starts over with an empty plan. Refused while a booking is in flight or its status is unknown. */
+  reset() {
+    const st = this.state;
+    if (st.status === "booking" || st.status === "status_unknown") return this.deny("reset", "Check whether the booking went through before starting over.");
+    this.state = initialState();
+    this.save();
   }
 
   /** The user picks another option than the recommended one (L1: the agent recommends, the user decides) */
@@ -130,7 +142,7 @@ export class Agent {
     const add = (kind: Approval["kind"], exceptionId?: string) => {
       const a: Approval = { id: `AP-${hash(`${p.id}${p.version}${kind}${exceptionId ?? ""}${st.seq}`)}`, kind, exceptionId, by: "coordinator", proposalId: p.id, version: p.version, termsHash: p.termsHash, at: this.now() };
       st.approvals.push(a);
-      this.log("user", "approval", kind === "booking" ? `Approved proposal v${p.version} for USD ${p.option.quote.total.toFixed(2)}.` : `Accepted: ${p.option.exceptions.find((e) => e.id === exceptionId)!.text}`, { proposalId: p.id, version: p.version, approvalId: a.id });
+      this.log("user", "approval", kind === "booking" ? `Approved proposal v${p.version} for ${money(p.option.quote.total)}.` : `Accepted: ${p.option.exceptions.find((e) => e.id === exceptionId)!.text}`, { proposalId: p.id, version: p.version, approvalId: a.id });
     };
     for (const ex of p.option.exceptions.filter((e) => e.approver === "coordinator")) add("exception", ex.id);
     add("booking");
@@ -198,6 +210,7 @@ export class Agent {
   cancel() {
     const st = this.state;
     if (st.status === "booking") return this.deny("cancel", "A booking is being confirmed; wait for the answer, then cancel it if needed.");
+    if (st.status === "status_unknown") return this.deny("cancel", "It may already be booked; check its status before cancelling.");
     if (st.status === "confirmed") return this.deny("cancel", "This booking is confirmed; cancelling it needs a separate approval (not supported in this prototype).");
     st.proposal = undefined;
     const text = st.booking ? "Cancelled." : "Cancelled. Nothing was booked.";
@@ -236,9 +249,9 @@ export class Agent {
     const done = (key: keyof Memo) => m[key] !== undefined && m[key] === k[key];
     const waitingUser = st.status === "needs_user";
     const tasks: Task[] = [
-      t("interpret", "Understand the goal", "L3", st.goalText ? "done" : "pending"),
-      t("validate", "Validate shipment information", "L3", done("validate") ? (st.questions.length ? "needs_user" : "done") : "pending", st.questions.length ? `${st.questions.length} question(s)` : undefined),
+      t("interpret", "Read your goal", "L3", st.goalText ? "done" : "pending"),
       t("restrictions", "Check cargo restrictions", "L3", st.status === "blocked" ? "blocked" : st.status === "handoff" ? "blocked" : done("restrictions") ? "done" : "pending"),
+      t("validate", "Check the details needed to search", "L3", st.status === "blocked" || st.status === "handoff" ? "pending" : done("validate") ? (st.questions.length ? "needs_user" : "done") : "pending", st.questions.length ? `${st.questions.length} question(s)` : undefined),
       t("search", "Search available flights", "L3", done("search") ? (st.flights.length ? "done" : "needs_user") : "pending", done("search") ? `${st.flights.length} found` : undefined),
       t("rates", "Retrieve freight rates", "L3", done("rates") ? "done" : "pending"),
       t("compare", "Compare options and recommend one", "L1", done("compare") ? "done" : "pending"),
@@ -247,6 +260,10 @@ export class Agent {
       t("confirm", "Confirm the booking", "L2", st.booking ? "done" : st.status === "booking" || st.status === "status_unknown" ? "running" : st.status === "failed" && st.failedTool === "confirmBooking" ? "failed" : "pending"),
     ];
     for (const task of tasks) if (st.status === "failed" && st.failedTool && toolTask(st.failedTool) === task.id) task.status = "failed";
+    if (st.status === "running" && st.currentTool) {
+      const id = toolTask(st.currentTool);
+      tasks.find((x) => x.id === id)!.status = "running";
+    }
     if (waitingUser && st.questions.some((q) => NEEDED_TO_PROPOSE.includes(q.field as ShipmentKey) || q.field === "docs")) {
       const d = tasks.find((x) => x.id === "draft")!;
       d.status = "needs_user";
@@ -291,6 +308,7 @@ export class Agent {
       }
     } finally {
       this.running = false;
+      this.state.currentTool = undefined;
       if (this.halt) {
         const h = this.halt;
         this.halt = undefined;
@@ -313,17 +331,7 @@ export class Agent {
     // Unknown status after a timeout: always check before anything else
     if (st.status === "status_unknown" && st.idempotencyKey) return this.checkStatus();
 
-    // 1 · Validate what we have, ask for what's missing
-    if (m.validate !== k.validate) {
-      await this.tool("validateShipment", { shipment: s }, () => {
-        const b = toBooking(s);
-        const errs = { ...step1Errors(b), ...step2Errors(b) };
-        return { missingToSearch: missing(s, NEEDED_TO_SEARCH), missingToPropose: missing(s, NEEDED_TO_PROPOSE), formErrors: Object.keys(errs) };
-      });
-      m.validate = k.validate;
-    }
-
-    // 2 · Restrictions, on whatever is known so far: a blocked or specialist shipment is said at once, before more questions.
+    // 1 · Restrictions, on whatever is known so far: a blocked or specialist shipment is said at once, before more questions.
     //     Hard ones block for everyone; specialist cargo goes to the form.
     if (m.restrictions !== k.restrictions) {
       const r = await this.tool("checkCargoRestrictions", { shipment: s }, () => ({ restrictions: hardRestrictions(s) }));
@@ -336,7 +344,17 @@ export class Agent {
     }
     if (st.restrictions.length) {
       st.questions = [];
-      return this.wait("blocked", `Blocked: ${st.restrictions[0].text} Only a change to the shipment clears it.`);
+      return this.wait("blocked", `${st.restrictions[0].text} Only a change to the shipment clears it.`);
+    }
+
+    // 2 · Validate what we have
+    if (m.validate !== k.validate) {
+      await this.tool("validateShipment", { shipment: s }, () => {
+        const b = toBooking(s);
+        const errs = { ...step1Errors(b), ...step2Errors(b) };
+        return { missingToSearch: missing(s, NEEDED_TO_SEARCH), missingToPropose: missing(s, NEEDED_TO_PROPOSE), formErrors: Object.keys(errs) };
+      });
+      m.validate = k.validate;
     }
 
     // 3 · Ask for what a search needs (nothing is guessed)
@@ -445,6 +463,7 @@ export class Agent {
     if (this.halt) throw new StopRun();
     st.status = "running";
     st.statusText = TOOL_TEXT[name];
+    st.currentTool = name;
     this.emit();
     for (;;) {
       st.attempts[name] = (st.attempts[name] ?? 0) + 1;
@@ -460,6 +479,7 @@ export class Agent {
         if (out === undefined || out === null || typeof out !== "object") throw new ApiError("BAD_OUTPUT", "The tool returned something unexpected.");
         this.log("agent", "tool_result", resultText(name, out), { tool: name, level: TOOL_LEVEL[name], output: summarize(out) });
         st.attempts[name] = 0;
+        st.currentTool = undefined;
         return out;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -487,7 +507,7 @@ export class Agent {
     this.setStatus("booking", `Booking ${p.option.flight.flightNo}…`);
     this.save();
     const approval = currentApproval(st, "booking")!;
-    this.log("agent", "tool_call", `Confirming the booking for USD ${p.option.quote.total.toFixed(2)}.`, { tool: "confirmBooking", level: "L2", proposalId: p.id, version: p.version, approvalId: approval.id, idempotencyKey: key });
+    this.log("agent", "tool_call", `Confirming the booking for ${money(p.option.quote.total)}.`, { tool: "confirmBooking", level: "L2", proposalId: p.id, version: p.version, approvalId: approval.id, idempotencyKey: key });
     await sleep(this.deps.delayMs);
     const r = this.deps.api.confirm({ idempotencyKey: key, proposalId: p.id, version: p.version, flight: p.option.flight, quote: p.option.quote, shipment: p.shipment });
     if (r.ok) return this.booked(r.booking);
@@ -541,7 +561,7 @@ export class Agent {
     const old = p.option.quote;
     st.quotes = st.quotes.map((x) => (x.flightId === q.flightId ? q : x));
     if (q.total !== old.total) {
-      this.log("agent", "invalidation", `${why}: USD ${old.total.toFixed(2)} → USD ${q.total.toFixed(2)}. Approvals for v${p.version} no longer apply.`, { proposalId: p.id, version: p.version });
+      this.log("agent", "invalidation", `${why}: ${money(old.total)} → ${money(q.total)}. Approvals for v${p.version} no longer apply.`, { proposalId: p.id, version: p.version });
       st.memo.compare = undefined; // exceptions (budget) are re-evaluated on the new price
     } else {
       // Same price: the terms are unchanged, so the approval still applies; only the validity is renewed
@@ -549,7 +569,7 @@ export class Agent {
       st.options = st.options.map((o) => (o.flight.id === q.flightId ? { ...o, quote: q } : o));
       st.memo.compare = this.keys().compare;
       st.memo.draft = this.keys().draft;
-      this.log("agent", "decision", `${why} at the same price (USD ${q.total.toFixed(2)}); the approval still applies.`, { proposalId: p.id, version: p.version });
+      this.log("agent", "decision", `${why} at the same price (${money(q.total)}); the approval still applies.`, { proposalId: p.id, version: p.version });
     }
   }
 
@@ -614,20 +634,20 @@ export class Agent {
     // Options that meet every constraint come first; within each group, the user's priority decides
     const sorted = [...rows].sort((a, b) => a.exceptions.length - b.exceptions.length || (score(a) < score(b) ? -1 : 1));
     const best = sorted[0];
-    const fmt = (s: string) => s.slice(0, 16).replace("T", " ");
+    const fmt = when;
     return sorted.map((r, i) => {
       const reasons: string[] = [];
       if (prio === "fastest" && r.flight.transitHours === minT) reasons.push("Fastest of the options, as you asked.");
       if (prio === "cheapest" && r.quote.total === minP) reasons.push("Cheapest of the options, as you asked.");
       if (deadline) reasons.push(r.flight.arrives <= deadline ? `Arrives ${fmt(r.flight.arrives)}, before the deadline.` : `Arrives ${fmt(r.flight.arrives)}, after the deadline.`);
-      if (budget !== undefined) reasons.push(r.quote.total <= budget ? `USD ${r.quote.total.toFixed(2)}, within the USD ${budget.toFixed(2)} budget.` : `USD ${r.quote.total.toFixed(2)}, over the USD ${budget.toFixed(2)} budget.`);
-      if (!reasons.length) reasons.push(`${r.flight.service} service, ${r.flight.transitHours} h door to door, USD ${r.quote.total.toFixed(2)}.`);
+      if (budget !== undefined) reasons.push(r.quote.total <= budget ? `${money(r.quote.total)}, within the ${money(budget)} budget.` : `${money(r.quote.total)}, over the ${money(budget)} budget.`);
+      if (!reasons.length) reasons.push(`${r.flight.service} service, ${r.flight.transitHours} h door to door, ${money(r.quote.total)}.`);
       const tradeoffs = sorted
         .filter((o) => o !== r)
         .map((o) => {
           const dp = o.quote.total - r.quote.total;
           const dt = o.flight.transitHours - r.flight.transitHours;
-          return `${o.flight.flightNo} (${o.flight.service}): ${dp < 0 ? `USD ${(-dp).toFixed(2)} cheaper` : `USD ${dp.toFixed(2)} more`}, ${dt < 0 ? `${-dt} h faster` : `${dt} h slower`}${o.exceptions.length ? `, ${o.exceptions.map((e) => e.kind === "budget" ? "over budget" : "late").join(" and ")}` : ""}.`;
+          return `${o.flight.flightNo} (${o.flight.service}): ${dp < 0 ? `${money((-dp))} cheaper` : `${money(dp)} more`}, ${dt < 0 ? `${-dt} h faster` : `${dt} h slower`}${o.exceptions.length ? `, ${o.exceptions.map((e) => e.kind === "budget" ? "over budget" : "late").join(" and ")}` : ""}.`;
         });
       return {
         flight: r.flight,
@@ -664,7 +684,7 @@ export class Agent {
     const changes: string[] = [];
     if (prev) {
       if (prev.option.flight.id !== option.flight.id) changes.push(`Flight ${prev.option.flight.flightNo} → ${option.flight.flightNo}`);
-      if (prev.option.quote.total !== option.quote.total) changes.push(`Price USD ${prev.option.quote.total.toFixed(2)} → USD ${option.quote.total.toFixed(2)}`);
+      if (prev.option.quote.total !== option.quote.total) changes.push(`Price ${money(prev.option.quote.total)} → ${money(option.quote.total)}`);
       for (const [key, f] of Object.entries(st.shipment)) {
         const before = (prev.shipment as Record<string, Field<unknown>>)[key]?.value;
         if (stable(before) !== stable((f as Field<unknown>).value) && key !== "totalWeight" && key !== "docs") changes.push(`${LABELS[key as ShipmentKey]} changed`);

@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { Booking } from "./data";
 
-export type Page = "step1" | "step2" | "step3" | "step4" | "step5" | "bookings" | "tracking" | "customs";
+export type Page = "step1" | "step2" | "step3" | "step4" | "step5" | "bookings" | "tracking" | "customs" | "agent";
 
 export type Ui = {
   /** Steps the user tried to save: their errors show until fixed */
@@ -28,6 +28,8 @@ export type Ui = {
   bookingsTab: "All" | "Active" | "Drafts" | "Completed";
   trackingTab: "details" | "map";
   scenario: "normal" | "delay" | "stale";
+  /** The form was filled in from a CargoPilot plan ("Continue in the form") */
+  fromAgent: boolean;
 };
 
 export const INITIAL_UI: Ui = {
@@ -48,6 +50,7 @@ export const INITIAL_UI: Ui = {
   bookingsTab: "All",
   trackingTab: "details",
   scenario: "normal",
+  fromAgent: false,
 };
 
 export type GoOptions = {

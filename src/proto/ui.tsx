@@ -48,7 +48,7 @@ const NAV: { label: string; d: string; page?: Page; filled?: boolean }[] = [
   { label: "Settings", d: "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 14a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 10a2 2 0 1 1 0 4 1.7 1.7 0 0 0-1.6 1z" },
 ];
 
-export function Shell({ active, children }: { active: "New booking" | "My bookings"; children: ReactNode }) {
+export function Shell({ active, children, headerExtra, user }: { active: "New booking" | "My bookings"; children: ReactNode; headerExtra?: ReactNode; user?: { initials: string; name: string } }) {
   const { go, toast } = useProto();
   const soon = (what: string) => toast(`${what} isn't part of this prototype.`);
   return (
@@ -59,9 +59,10 @@ export function Shell({ active, children }: { active: "New booking" | "My bookin
         </button>
         <SearchBar />
         <div className="p-head-right">
+          {headerExtra}
           <button type="button" onClick={() => soon("Notifications")}>Notifications</button>
           <button type="button" onClick={() => soon("Language settings")}>EN</button>
-          <button type="button" className="p-avatar" onClick={() => soon("Your profile")}><span>JS</span>Jane Smith</button>
+          <button type="button" className="p-avatar" onClick={() => soon("Your profile")}><span>{user?.initials ?? "JS"}</span>{user?.name ?? "Jane Smith"}</button>
         </div>
       </header>
       <div className="p-body">
@@ -358,5 +359,40 @@ export function Summary({ rows, total, status = "Draft" }: { rows: { title?: str
       <h4>Status</h4>
       <span className="p-badge">{status}</span>
     </aside>
+  );
+}
+
+/* ---------- the agent path, seen from the form ---------- */
+
+/** The second way into New booking. The form stays the default; this is offered, not pushed. */
+export function AgentEntry() {
+  const { go } = useProto();
+  return (
+    <div className="a-entry">
+      <span className="a-entry-icon" aria-hidden="true">
+        <Icon d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" size={18} fill="currentColor" />
+      </span>
+      <div className="grow">
+        <b>Rather describe it in a sentence?</b>
+        CargoPilot fills in the details, compares flights and asks you before booking. Mock mode: rule-based, no language model.
+      </div>
+      <button type="button" className="p-btn secondary sm" onClick={() => go("agent")}>Plan with CargoPilot</button>
+    </div>
+  );
+}
+
+/** Shown on the form after "Continue in the form": where the data came from, and that the form's rules still apply */
+export function FromAgent() {
+  const { setUi, go } = useProto();
+  return (
+    <div className="p-alert info" role="status">
+      <Icon d={I.info} size={20} />
+      <div style={{ flex: 1 }}>
+        <b>Filled in from your CargoPilot plan</b>
+        Everything CargoPilot had is in the form, and what it didn't have is empty. Check each step: the form applies the same limits.{" "}
+        <button type="button" className="p-fix" style={{ fontSize: "inherit" }} onClick={() => go("agent")}>Back to the plan</button>
+      </div>
+      <button type="button" className="p-search-clear" aria-label="Dismiss" onClick={() => setUi({ fromAgent: false })}><Icon d={I.x} size={16} /></button>
+    </div>
   );
 }

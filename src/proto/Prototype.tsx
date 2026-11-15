@@ -12,6 +12,7 @@ import ReviewPage from "./pages/ReviewPage";
 import ConfirmationPage from "./pages/ConfirmationPage";
 import BookingsPage from "./pages/BookingsPage";
 import { CustomsPage, TrackingPage } from "./pages/Generated";
+import AgentPage from "./pages/AgentPage";
 import "./proto.css";
 
 const PAGES: Record<Page, () => ReactElement> = {
@@ -23,6 +24,7 @@ const PAGES: Record<Page, () => ReactElement> = {
   bookings: BookingsPage,
   tracking: TrackingPage,
   customs: CustomsPage,
+  agent: AgentPage,
 };
 
 export type Preset = { b?: Partial<Booking>; ui?: Partial<Ui> };

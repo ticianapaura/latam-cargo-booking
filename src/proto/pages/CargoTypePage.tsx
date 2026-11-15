@@ -1,6 +1,6 @@
-import { CARGO_TYPES, HANDLING, INSTR_MAX, STEP1_SUMMARY, kgText, step1Errors, step1Ready, totalKg } from "../data";
+import { placeName, CARGO_TYPES, HANDLING, INSTR_MAX, STEP1_SUMMARY, kgText, step1Errors, step1Ready, totalKg } from "../data";
 import { useProto } from "../store";
-import { BookingHead, Chips, ErrorSummary, ErrorText, Field, Select, Shell, Summary, TextInput } from "../ui";
+import { AgentEntry, BookingHead, Chips, ErrorSummary, ErrorText, Field, FromAgent, Select, Shell, Summary, TextInput } from "../ui";
 
 /** Step 1 · Cargo type. Errors appear after the first save attempt and clear as the user fixes them. */
 export default function CargoTypePage() {
@@ -27,6 +27,7 @@ export default function CargoTypePage() {
       <div className="p-grid">
         <div>
           {submitted && Object.keys(all).length > 0 && <ErrorSummary errors={errors} labels={STEP1_SUMMARY} />}
+          {ui.fromAgent ? <FromAgent /> : !submitted && <AgentEntry />}
 
           <section className="p-section">
             <h2>Cargo type</h2>
@@ -100,7 +101,7 @@ export default function CargoTypePage() {
         <Summary
           rows={[
             { items: [["Cargo type", b.cargoType], ["Cargo description", b.description], ["Number of pieces", b.pieces], ["Total weight", total ? kgText(total) : ""], ["Dimensions", dims], ["Handling requirements", b.handling.join(", ")]] },
-            { title: "Route", items: [["Origin", ""], ["Destination", ""]] },
+            { title: "Route", items: ui.fromAgent ? [["Origin", placeName(b.originAirport)], ["Destination", placeName(b.destAirport)]] : [["Origin", ""], ["Destination", ""]] },
           ]}
         />
       </div>

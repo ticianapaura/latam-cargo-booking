@@ -29,7 +29,7 @@ const CARGO_WORDS: [RegExp, string][] = [
   [/\b(dangerous goods|hazmat|lithium batter(y|ies)|batter(y|ies)|chemicals?|flammable)\b/, "Dangerous goods"],
   [/\b(live animals?|pets?|dogs?|cats?|horses?|livestock)\b/, "Live animals"],
   [/\b(vaccines?|medicines?|pharma(ceuticals?)?|drugs)\b/, "Pharmaceuticals"],
-  [/\b(fresh|perishables?|salmon|fish|seafood|fruit|flowers|meat)\b/, "Perishables"],
+  [/\b(salmon|fish|seafood|fruit|flowers|meat|perishables?|fresh)\b/, "Perishables"],
   [/\b(jewel(le)?ry|gold|valuables|banknotes)\b/, "Valuables"],
   [/\b(merchandise|general cargo|goods|auto parts|spare parts|parts|textiles|clothing|machinery)\b/, "General cargo"],
 ];

@@ -27,7 +27,10 @@ export default function BookingsPage() {
     <Shell active="My bookings">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "4px 0 24px" }}>
         <h1 style={{ margin: 0, fontSize: 30, fontWeight: 600 }}>My bookings</h1>
-        <button type="button" className="p-btn md" onClick={() => go("step1", { fresh: true })}>New booking</button>
+        <div style={{ display: "flex", gap: 12 }}>
+          <button type="button" className="p-btn secondary md" onClick={() => go("agent")}>Plan with CargoPilot</button>
+          <button type="button" className="p-btn md" onClick={() => go("step1", { fresh: true })}>New booking</button>
+        </div>
       </div>
       {ui.confirmed && (
         <div className="p-alert ok" role="status" style={{ marginBottom: 22 }}>

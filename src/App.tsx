@@ -110,8 +110,8 @@ function Index() {
           <div><dt>{total}</dt><dd>screens to walk</dd></div>
         </dl>
         <p className="status">
-          <b>Mock mode, no AI features yet.</b> The agent path from the case study is being added step by step. It will run
-          on fixed rules and synthetic data, with no language model, and it will say so on screen.
+          <b>Mock mode, no language model.</b> The agent path is in progress: open any flow, then New booking → Plan with
+          CargoPilot. It runs on fixed rules and synthetic data, and says so on screen. Nothing in it is LLM-powered.
         </p>
         <p className="how">
           <b>How to use it:</b> open a flow, then click the highlighted button on the screen, use Next, or press

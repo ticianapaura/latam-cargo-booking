@@ -46,7 +46,7 @@ describe("index", () => {
     assert.equal(await page.locator(".card").count(), EXPECTED_FLOWS);
     assert.equal(await page.locator(".group").count(), 6);
     assert.doesNotMatch(await page.innerText("body"), /LATAM/);
-    assert.match(await page.innerText("body"), /Mock mode, no AI features yet/);
+    assert.match(await page.innerText("body"), /Mock mode, no language model/);
     assert.deepEqual(errors, []);
     await page.close();
   });
@@ -278,6 +278,251 @@ describe("portfolio preview", () => {
     await page.waitForTimeout(300);
     assert.equal(await page.locator(".bar").count(), 0);
     assert.ok(await page.locator(".embed .screen > *").count());
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+});
+
+/* ---------- the agent path (Plan with CargoPilot) ---------- */
+
+const SALMON = "Ship 10 boxes of fresh salmon, 25 kg each, 35x40x60 cm, chilled, from EZE to GRU, pick up on Nov 11";
+
+/** Opens the agent page from My bookings, with the agent's on-screen delay off unless asked */
+async function openAgent({ delay = 0, width = 1440, height = 900 } = {}) {
+  const { page, errors } = await open(`?agentDelay=${delay}#/flow/happy-path/7`, { width, height });
+  await page.click(".screen button:has-text('Plan with CargoPilot')");
+  await page.waitForSelector("h1:has-text('Plan with CargoPilot')");
+  return { page, errors };
+}
+const start = async (page, goal) => {
+  await page.fill("#goal", goal);
+  await page.click("button:has-text('Start planning')");
+};
+const status = (page) => page.innerText(".a-status b");
+const simulate = async (page, label) => {
+  await page.click("summary:has-text('Prototype controls')");
+  await page.locator(".a-sim label", { hasText: label }).click();
+};
+/** Answers the proposal questions and attaches the sample documents */
+async function details(page) {
+  await page.click("#ag-pickupTime");
+  await page.click("[role=option]:has-text('10:00 AM')");
+  for (const [k, v] of [["pickupAddress", "Ruta 205 km 32"], ["originPostal", "1804"], ["deliveryAddress", "Rua Dr. Assis 410"], ["destPostal", "07190-100"]]) await page.fill(`#ag-${k}`, v);
+  await page.click("form[aria-label='A few details for the proposal'] button[type=submit]");
+  await page.click("button:has-text('Attach sample documents')");
+  await page.waitForSelector("text=Your approval is needed to book");
+}
+
+describe("agent path", () => {
+  test("entry points on New booking and My bookings; mock mode is labeled", async () => {
+    const { page, errors } = await open("?agentDelay=0#/flow/happy-path/1");
+    assert.equal(await page.locator(".a-entry button:has-text('Plan with CargoPilot')").count(), 1);
+    assert.match(await page.innerText(".a-entry"), /no language model/);
+    await page.click(".a-entry button");
+    await page.waitForSelector("h1:has-text('Plan with CargoPilot')");
+    const text = await page.innerText(".screen");
+    assert.match(text, /Mock mode · rule-based, no language model/);
+    assert.match(text, /Nothing is booked until you approve it/);
+    assert.doesNotMatch(text, /LATAM|\bLA ?\d{4}\b|\b045-\d|AI-powered|understands|thinks/);
+    assert.equal(await page.locator(".a-role button[aria-pressed=true]").innerText(), "Coordinator");
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("goal → question → options → details → approval → one booking", async () => {
+    const { page, errors } = await openAgent();
+    await page.click("button.p-chip:has-text('Salmon to São Paulo')");
+    await page.click("button:has-text('Start planning')");
+    // Buenos Aires has two airports: asked, not guessed
+    await page.waitForSelector("text=Which airport?");
+    assert.equal(await status(page), "Needs your answer");
+    assert.match(await page.innerText(".a-read-summary"), /\? → GRU/);
+    assert.equal(await page.locator(".a-task.needs_user").count(), 1);
+    await page.click("[role=radio]:has-text('EZE')");
+    await page.click("form[aria-label='A few answers before searching flights'] button[type=submit]");
+    // Options with reasons, and the recommended one first
+    await page.waitForSelector(".a-option.rec");
+    assert.match(await page.innerText(".a-option.rec"), /Why it's recommended[\s\S]*before the deadline[\s\S]*within the USD 1,200.00 budget/);
+    assert.equal(await page.locator(".a-option").count(), 3);
+    await details(page);
+    assert.equal(await status(page), "Ready for your approval");
+    assert.match(await page.innerText(".a-panel"), /Booked\s+Nothing yet/i);
+    await page.click("button:has-text('Approve and book')");
+    await page.waitForSelector(".a-block.ok");
+    assert.equal(await status(page), "Booked");
+    assert.match(await page.innerText(".a-block.ok"), /Booked #\d+ · AWB 000-\d{8}/);
+    assert.match(await page.innerText(".a-plan .a-count"), /9 of 9 steps done/);
+    // Technical detail stays secondary: the log is closed until asked for
+    assert.equal(await page.locator("details.a-log[open]").count(), 0);
+    await page.click(".a-panel button:has-text('Activity log')");
+    await page.waitForSelector("details.a-log[open]");
+    assert.ok((await page.locator(".a-log-list li").count()) > 20);
+    assert.match(await page.innerText(".a-log-list"), /confirmBooking · L2/);
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("a correction in what was read re-plans and is logged", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option.rec");
+    await page.click("button:has-text('Show and correct')");
+    await page.click("button[aria-label='Change number of pieces']");
+    await page.fill("#ag-pieces", "12");
+    await page.click("button:has-text('Save and re-plan')");
+    await page.waitForSelector(".a-src.you:has-text('You set it')");
+    assert.match(await page.innerText(".a-read"), /12 pieces/);
+    // Re-quoted at the new weight: 12 × 25 = 300 kg
+    await page.click(".a-option.rec >> text=Price breakdown and sources");
+    assert.match(await page.innerText(".a-option.rec .a-breakdown"), /300 kg/);
+    await page.close();
+  });
+
+  test("a late arrival must be accepted before Approve unlocks", async () => {
+    const { page } = await openAgent();
+    await start(page, `${SALMON}, cheapest, deliver before Friday`);
+    await page.waitForSelector(".a-option");
+    await details(page);
+    const approve = page.locator("button:has-text('Approve and book')");
+    assert.equal(await approve.isDisabled(), true);
+    await page.check(".a-accept input");
+    assert.equal(await approve.isDisabled(), false);
+    await page.close();
+  });
+
+  test("over budget: the coordinator waits; the Manager decides the exception, not the booking", async () => {
+    const { page } = await openAgent();
+    await start(page, `${SALMON}, fastest, budget of USD 1,000`);
+    await page.waitForSelector(".a-option");
+    await details(page);
+    await page.click("article:has-text('Express') button:has-text('Use this option instead')");
+    await page.waitForSelector("text=Waiting for the Logistics Manager");
+    assert.equal(await status(page), "Waiting for the Manager");
+    assert.equal(await page.locator("button:has-text('Approve and book')").count(), 0);
+    await page.click(".a-role button:has-text('Manager')");
+    await page.waitForSelector("text=Exception for you to decide");
+    assert.match(await page.innerText(".screen .p-head-right"), /Marta Ruiz/);
+    await page.click("button:has-text('Approve exception')");
+    await page.waitForSelector("text=The coordinator approves the booking itself");
+    assert.equal(await page.locator("button:has-text('Approve and book')").count(), 0, "the Manager can't book");
+    await page.click(".a-role button:has-text('Coordinator')");
+    assert.match(await page.innerText(".a-block.approve"), /Over budget, approved by the Logistics Manager/);
+    await page.click("button:has-text('Approve and book')");
+    await page.waitForSelector(".a-block.ok");
+    await page.close();
+  });
+
+  test("hard restriction: blocked for everyone; the Manager has nothing to approve; a fix clears it", async () => {
+    const { page } = await openAgent();
+    await start(page, "Ship 10 boxes of auto parts, 25 kg each, 35x40x60 cm, from Mendoza to GRU, pick up on Nov 12");
+    await page.waitForSelector(".a-block.bad");
+    assert.equal(await status(page), "Blocked");
+    assert.match(await page.innerText(".a-block.bad"), /no one can approve them, the Manager included/);
+    await page.click(".a-role button:has-text('Manager')");
+    assert.match(await page.innerText(".a-banner.info"), /Nothing is waiting for you/);
+    assert.equal(await page.locator(".a-block.bad button").count(), 0);
+    await page.click(".a-role button:has-text('Coordinator')");
+    await page.click("button:has-text('Use EZE')");
+    await page.waitForSelector(".a-option.rec");
+    await page.close();
+  });
+
+  test("dangerous goods: explained, and handed to the form with what's known", async () => {
+    const { page } = await openAgent();
+    await start(page, "Ship 3 boxes of lithium batteries, 18 kg each, 50x40x30 cm, from Córdoba to Lima, pick up on Nov 12");
+    await page.waitForSelector("text=need a specialist: continue in the form");
+    assert.match(await page.innerText(".a-block.info"), /declaration, packing checks/);
+    await page.click(".a-block.info button:has-text('Continue in the form')");
+    await page.waitForSelector("text=Filled in from your CargoPilot plan");
+    assert.match(await page.innerText("#cargoType"), /Dangerous goods/);
+    assert.equal(await page.inputValue("#pieces"), "3");
+    assert.equal(await page.inputValue("#weight"), "18");
+    assert.equal(await page.inputValue("#dims"), "50");
+    assert.match(await page.innerText(".p-summary"), /Córdoba \(COR\)[\s\S]*Lima \(LIM\)/);
+    await page.close();
+  });
+
+  test("price change at booking: a new version, what changed, approval asked again", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await simulate(page, "The price goes up at booking");
+    await details(page);
+    await page.click("button:has-text('Approve and book')");
+    await page.waitForSelector("text=What changed since v1");
+    assert.match(await page.innerText(".a-changes"), /Price USD 1,159.13 → USD 1,260.04[\s\S]*approval of v1 no longer applies/);
+    assert.match(await page.innerText(".a-panel"), /Nothing yet/);
+    await page.close();
+  });
+
+  test("status unknown: said plainly, no Cancel, nothing re-sent; checking again resolves it", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await simulate(page, "Booking times out, status can't be checked");
+    await details(page);
+    await page.click("button:has-text('Approve and book')");
+    await page.waitForSelector("text=It isn't known yet whether this booked");
+    assert.equal(await status(page), "Booking status unknown");
+    assert.match(await page.innerText(".a-task.failed"), /Status unknown/);
+    assert.equal(await page.locator(".a-panel button:has-text('Cancel plan')").count(), 0);
+    assert.equal(await page.locator(".a-panel button:has-text('Continue in the form')").count(), 0);
+    await page.click("button:has-text('Check the status again')");
+    await page.waitForSelector(".a-block.ok");
+    await page.click(".a-panel button:has-text('Activity log')");
+    const log = await page.innerText(".a-log-list");
+    assert.equal((log.match(/Confirming the booking/g) ?? []).length, 1, "the booking was sent once");
+    await page.close();
+  });
+
+  test("a failing tool: Failed with Retry, progress kept", async () => {
+    const { page } = await openAgent();
+    await simulate(page, "Flight search keeps failing");
+    await start(page, SALMON);
+    await page.waitForSelector("text=didn't work after 3 attempts");
+    assert.equal(await status(page), "Something didn't work");
+    assert.match(await page.innerText(".a-read-summary"), /EZE → GRU/);
+    await page.click("button:has-text('Retry')");
+    await page.waitForSelector(".a-option.rec");
+    await page.close();
+  });
+
+  test("pause while working, reload, resume", async () => {
+    const { page } = await openAgent({ delay: 400 });
+    await start(page, SALMON);
+    await page.click(".a-panel button:has-text('Pause')");
+    await page.waitForSelector(".a-banner.mute:has-text('Paused')");
+    assert.equal(await status(page), "Paused");
+    await page.reload();
+    await page.click(".screen button:has-text('Plan with CargoPilot')");
+    await page.waitForSelector(".a-banner.mute:has-text('Paused')");
+    assert.match(await page.innerText(".a-goal"), /fresh salmon/);
+    await page.click(".a-panel button:has-text('Resume')");
+    await page.waitForSelector(".a-option.rec", { timeout: 15000 });
+    await page.close();
+  });
+
+  test("cancel asks first, keeps what was read, books nothing", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option");
+    await page.click(".a-panel button:has-text('Cancel plan')");
+    await page.click(".a-confirm button:has-text('Keep planning')");
+    assert.notEqual(await status(page), "Cancelled");
+    await page.click(".a-panel button:has-text('Cancel plan')");
+    await page.click(".a-confirm button:has-text('Cancel plan')");
+    assert.equal(await status(page), "Cancelled");
+    assert.match(await page.innerText(".a-block.mute"), /Nothing was booked/);
+    await page.close();
+  });
+
+  test("works on a 1280 × 800 laptop without horizontal scroll", async () => {
+    const { page, errors } = await openAgent({ width: 1280, height: 800 });
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option.rec");
+    assert.ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= 1280);
+    const zoom = await page.evaluate(() => Number(getComputedStyle(document.querySelector(".screen")).zoom));
+    assert.ok(zoom >= 0.68, `screen scale ${zoom}`);
     assert.deepEqual(errors, []);
     await page.close();
   });

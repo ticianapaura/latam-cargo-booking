@@ -58,3 +58,14 @@ export function seeded(seed: string) {
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 export const sleep = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+
+/** Money as the app writes it: USD 1,159.13 */
+export const money = (n: number) => `USD ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** A flight time as the user reads it: Fri, Nov 13 · 1:55 AM (the prototype has no time zones) */
+export function when(isoStr: string) {
+  const d = new Date(isoStr);
+  const date = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+  return `${date} · ${time}`;
+}

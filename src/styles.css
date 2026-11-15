@@ -117,6 +117,9 @@ a { color: var(--indigo); }
 .embed { background: var(--white); }
 .embed .screen { border-radius: 0; box-shadow: none; }
 
+/* laptops: a narrower step list leaves more room for the screen */
+@media (min-width: 861px) and (max-width: 1366px) { .stage { grid-template-columns: 236px minmax(0, 1fr); } .steps a { font-size: 14px; } }
+
 @media (max-width: 860px) {
   .stage { grid-template-columns: minmax(0, 1fr); }
   .steps { position: static; }

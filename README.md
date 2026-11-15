@@ -6,7 +6,7 @@ Playable front end of a five-step **air cargo booking flow** for CargoPilot AI, 
 
 > **Concept project.** CargoPilot AI is a fictional brand. Flights (CP…), air waybills (000-…), prices and bookings are synthetic. The design case study it comes from was made for LATAM Cargo; this prototype is not affiliated with LATAM Airlines Group.
 >
-> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step: its core (planner, policy, tools, audit log) exists and is tested, but it isn't in the app yet. It runs on fixed rules and synthetic data, with no language model.
+> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step: try it from New booking → **Plan with CargoPilot**. It runs on fixed rules and synthetic data, with no language model, and the page says so.
 
 ## Two different kinds of AI in this project
 
@@ -15,7 +15,7 @@ Keep these apart when reading the repo or the case study:
 | | What it is | Status |
 | --- | --- | --- |
 | **AI-assisted development** | I designed the screens and wrote this front end with an AI assistant (Claude): the design canvas, the generated screens, the React code and the tests. | Done. It's how the project was made, not a feature of the product. |
-| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. The core is built and tested (`src/agent/`); the screens come next. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
+| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. The core (`src/agent/`) and its page are built and tested; bookings don't reach My bookings or tracking yet. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
 
 ## Known issues
 
@@ -121,6 +121,24 @@ tools/
   convert.py        design canvas → React components
 ```
 
+## Plan with CargoPilot (the agent page)
+
+Open any flow, then **New booking** (a strip above Step 1) or **My bookings** → **Plan with CargoPilot**. The form stays the default way to book; the agent is offered next to it.
+
+The page follows the layout validated in the spec: the work in one column, in the order it happens, and a sticky panel in the same 330 px slot as the form's Booking summary.
+
+- **Goal first.** Describe the shipment in a sentence, or pick an example. Before anything runs, four steps say what will happen on its own and what waits for you.
+- **What CargoPilot read.** One summary line; open it to see every value with where it came from (your message, a default, you) and correct it in place. A correction re-plans from the first step it affects.
+- **The plan.** Nine steps, each tagged *Automatic*, *You choose* or *Needs approval*. Each question, restriction, option list and approval appears under the step that raised it. Finished steps collapse to a line; *Details* shows the tool, its input, result and calls.
+- **Options** show why the recommended one was picked, departure and arrival, door-to-door time (marked as an estimate), price with its breakdown, restrictions checked, trade-offs against the others, and what came from a tool versus what's estimated. While a proposal waits for approval they step back to one line each.
+- **Approval** is an amber card for one exact proposal version: what changed since the previous version and whether an earlier approval stopped counting, a late arrival to accept explicitly, and *Approve and book*. Nothing is booked before that click.
+- **Manager (simulated).** *Viewing as* in the header switches to the Logistics Manager, who approves or rejects going over budget and nothing else: not the booking, not a hard restriction.
+- **Recovery.** Blocked shipments explain that no one can approve them and offer the fix; dangerous goods and live animals explain why and hand everything known to the form; failures keep your progress and offer Retry; an unknown booking status says so plainly, hides Cancel and re-sends nothing.
+- **Control.** Pause (while it works or waits for the Manager), Cancel with a confirmation, and *Continue in the form* are always in the panel. The activity log is one click away, closed by default.
+- **Prototype controls** at the bottom of the panel make a problem happen once (price rise, released space, timeouts, a refusal, a failing search, no flights), to review every recovery path. They exist only in this prototype.
+
+Not yet: a booking made here doesn't appear in My bookings, Confirmation or Tracking (next increment), and the agent scenarios aren't flows in the index yet.
+
 ## The agent core (mock mode)
 
 `src/agent/` is the agent behind the upcoming "Book with the agent" path. **It is deterministic: rule-based reading of the goal, a state-based planner and mock tools. No language model is called anywhere.** It isn't wired into the app's screens yet.
@@ -171,14 +189,16 @@ npm run build      # writes assets/app.js and assets/app.css
 ```bash
 npm test             # both suites
 npm run test:unit    # booking rules, and 34 agent scenarios (Node's test runner)
-npm run test:e2e     # builds, then opens every step of all 16 flows in Chromium (Playwright)
+npm run test:e2e     # builds, then every step of all 16 flows and the agent page, in Chromium (Playwright)
 ```
 
 The end-to-end suite needs Chromium once: `npx playwright install chromium`. It opens the built site straight from disk, so no server is needed.
 
 The agent scenarios cover the success path; missing and ambiguous information (it asks, it never guesses); a hard restriction that no approval can clear; dangerous goods and live animals handed to the form with their data; no options; going over budget (Manager approval and rejection); a late arrival the user accepts; a price change and released space at confirmation; an expired quote; a rejection and an edit that re-plan and void the approval; failing tools and Retry; booking timeouts with and without a booking; duplicate confirmation; confirming without approval; missing documents; pause, reload and resume; a reload in the middle of a booking; corrupted saved state; and storage that isn't available.
 
-What the end-to-end suite covers: every step of every flow opens without errors and highlights the button its note mentions; Next, Previous and the arrow keys; the Step 1 dropdown with mouse and keyboard, totals, errors that clear and Save and continue; the designed error states of Steps 1 and 2; attaching, rejecting and removing documents with Undo; accepting terms and Edit on Review; the leave dialog and the draft it keeps; search suggestions, no results, no access and exact match; tracking tabs; and the portfolio preview.
+On the agent page, the end-to-end suite covers the entry points and mock labels; a full booking from goal to AWB; a correction that re-plans; accepting a late arrival; over budget with the Manager; a hard restriction the Manager can't clear; dangerous goods handed to the form; a price change; an unknown booking status; a failing tool; pause, reload and resume; cancel; and a 1280 × 800 laptop screen.
+
+What the end-to-end suite covers in the flows: every step of every flow opens without errors and highlights the button its note mentions; Next, Previous and the arrow keys; the Step 1 dropdown with mouse and keyboard, totals, errors that clear and Save and continue; the designed error states of Steps 1 and 2; attaching, rejecting and removing documents with Undo; accepting terms and Edit on Review; the leave dialog and the draft it keeps; search suggestions, no results, no access and exact match; tracking tabs; and the portfolio preview.
 
 ## Credits
 

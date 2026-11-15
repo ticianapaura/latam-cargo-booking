@@ -9,7 +9,7 @@
 import { DOCS, PICKUP_TIMES, TODAY, airport } from "../proto/data.ts";
 import { toBooking } from "./shipment.ts";
 import type { AgentState, Exception, Option, Proposal, Restriction, Role, Shipment, ToolName } from "./types.ts";
-import { hash, stable } from "./util.ts";
+import { hash, money, stable, when } from "./util.ts";
 
 export const TOOL_LEVEL: Record<ToolName, "L3" | "L2"> = {
   validateShipment: "L3",
@@ -93,10 +93,10 @@ export function commercialExceptions(o: Pick<Option, "flight" | "quote">, budget
       id: `EX-budget-${o.flight.id}`,
       kind: "budget",
       approver: "manager",
-      text: `USD ${o.quote.total.toFixed(2)} is USD ${(o.quote.total - budgetUsd).toFixed(2)} over the USD ${budgetUsd.toFixed(2)} budget.`,
+      text: `${money(o.quote.total)} is ${money((o.quote.total - budgetUsd))} over the ${money(budgetUsd)} budget.`,
     });
   if (deadline && o.flight.arrives > deadline)
-    out.push({ id: `EX-deadline-${o.flight.id}`, kind: "deadline", approver: "coordinator", text: `Arrives ${o.flight.arrives.slice(0, 16).replace("T", " ")}, after the deadline.` });
+    out.push({ id: `EX-deadline-${o.flight.id}`, kind: "deadline", approver: "coordinator", text: `Arrives ${when(o.flight.arrives)}, after the deadline.` });
   return out;
 }
 
