@@ -85,9 +85,9 @@ test("search: suggestions, exact match, no results, no access", () => {
   const s = search("#123", false);
   assert.equal(s.kind, "suggest");
   assert.deepEqual(s.kind === "suggest" && s.rows.map((r) => r.id), ["#1235", "#1234"]);
-  const m = search("045-12345678", false);
+  const m = search("000-12345678", false);
   assert.equal(m.kind === "match" && m.row.id, "#1234");
-  const none = search("045-1234", true);
+  const none = search("000-1234", true);
   assert.equal(none.kind, "none");
   assert.match(none.kind === "none" ? none.hint : "", /You entered 7/);
   assert.equal(search("#1198", true).kind, "noaccess");

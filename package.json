@@ -1,8 +1,8 @@
 {
-  "name": "latam-cargo-booking",
+  "name": "cargopilot-ai",
   "version": "1.0.0",
   "private": true,
-  "description": "Playable front end of the LATAM Cargo new-booking flow: happy path, inline errors and edge cases.",
+  "description": "CargoPilot AI (fictional): playable front end of an air cargo booking flow, with its edge cases. Concept project.",
   "type": "module",
   "scripts": {
     "dev": "node tools/build.mjs --dev",

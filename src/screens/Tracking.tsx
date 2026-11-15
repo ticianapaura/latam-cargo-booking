@@ -1,5 +1,6 @@
-// Generated from the LATAM Cargo design canvas by tools/convert.py. Edit the canvas, then regenerate.
+// Generated from the design canvas by tools/convert.py, with the CargoPilot AI brand applied. Edit the canvas, then regenerate.
 import { Fragment } from "react";
+import { BrandMark } from "../brand";
 
 export type TrackingProps = { scenario?: "normal" | "delay" | "stale"; tab?: "details" | "map" };
 
@@ -10,21 +11,7 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
   return (
     <div style={{ width: "1400px", minHeight: `${v.rootH}px`, boxSizing: "border-box", lineHeight: "1.3", background: "#FFFFFF", color: "#1A1831", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: "15px", display: "flex", flexDirection: "column" }}>
       <header style={{ height: "60px", flex: "none", background: "#1B1A31", color: "#FFFFFF", display: "flex", alignItems: "center", gap: "24px", padding: "0 28px 0 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ display: "block", width: "14px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "18px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "12px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: "700", fontSize: "16px", letterSpacing: "0.06em", lineHeight: "1" }}>
-              LATAM
-            </div>
-            <div style={{ fontSize: "10px", letterSpacing: "0.32em", color: "#C9C7DD" }}>
-              CARGO
-            </div>
-          </div>
-        </div>
+        <BrandMark />
         <div style={{ marginLeft: "70px", width: "440px", height: "38px", borderRadius: "7px", background: "#FFFFFF", display: "flex", alignItems: "center", gap: "10px", padding: "0 12px", color: "#8D8BA4", fontSize: "14px" }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
@@ -80,14 +67,14 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
               <span style={{ fontSize: "16px" }}>
                 {"AWB "}
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                  045-12345678
+                  000-12345678
                 </span>
               </span>
               <span style={{ fontSize: "16px" }}>
                 <b style={{ fontWeight: "600" }}>
                   Flight
                 </b>
-                {" LA8045"}
+                {" CP8045"}
               </span>
             </div>
             <div style={{ display: "flex", gap: "34px", borderBottom: "1px solid #D5D4E1", margin: "24px 0 30px" }}>
@@ -192,7 +179,7 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
                 {v.isMap && (
                   <>
                   <div style={{ position: "relative", width: "808px", height: "600px", borderRadius: "8px", overflow: "hidden", border: "1px solid #E7E6F0" }}>
-                    <svg width="808" height="600" viewBox="0 0 808 600" role="img" aria-label="Map of the shipment route: road pickup in Ezeiza, flight LA8045 from Buenos Aires EZE to São Paulo GRU, and road delivery in Guarulhos" style={{ display: "block" }}>
+                    <svg width="808" height="600" viewBox="0 0 808 600" role="img" aria-label="Map of the shipment route: road pickup in Ezeiza, flight CP8045 from Buenos Aires EZE to São Paulo GRU, and road delivery in Guarulhos" style={{ display: "block" }}>
                       <rect width="808" height="600" fill="#EEF0E9" />
                       <path d="M808 60 L760 95 L720 118 L690 140 L650 175 L600 222 L540 282 L470 352 L410 410 L360 452 L318 482 L285 500 L250 505 L215 498 L185 505 L200 522 L240 535 L290 555 L330 600 L808 600 Z" fill="#CFE0EE" />
                       <path d="M808 60 L760 95 L720 118 L690 140 L650 175 L600 222 L540 282 L470 352 L410 410 L360 452 L318 482 L285 500 L250 505 L215 498 L185 505 L200 522 L240 535 L290 555 L330 600" fill="none" stroke="#B7CCDD" strokeWidth="1.5" />
@@ -262,7 +249,7 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
                     <div style={{ position: "absolute", top: "16px", left: "16px", width: "270px", boxSizing: "border-box", background: "#FFFFFF", borderRadius: "10px", padding: "14px 16px", boxShadow: "0 8px 24px -8px rgba(20, 16, 60, 0.3)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <b style={{ fontWeight: "600", fontSize: "15px" }}>
-                          LA8045 · In flight
+                          CP8045 · In flight
                         </b>
                         <span style={{ fontSize: "12px", color: "#067647", fontWeight: "600" }}>
                           On time
@@ -315,7 +302,7 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <span style={{ width: "26px", height: "4px", borderRadius: "2px", background: "#3B1A8E" }} />
-                        Air · LA8045 in flight
+                        Air · CP8045 in flight
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <span style={{ width: "26px", height: "0", borderTop: "4px dashed #8D8BA4" }} />
@@ -460,7 +447,7 @@ export default function Tracking({ scenario = "normal", tab = "details" }: Track
           <footer style={{ marginTop: "auto", flex: "none", background: "#F5F5F9", borderTop: "1px solid #E7E6F0", padding: "24px 52px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "24px", fontSize: "13.5px", color: "#5E5C76" }}>
             <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
               <span style={{ fontWeight: "600", color: "#1A1831" }}>
-                LATAM Cargo
+                CargoPilot AI
               </span>
               <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
                 Help center
@@ -507,12 +494,12 @@ function values(props: TrackingProps) {
     const L = 'Buenos Aires (EZE), Argentina';
     const ok = (d, e, w) => ({ d, e, w, dot: '#17B26A', ring: '0', ic: '#FFFFFF', glyph: '✓', lineC: '#17B26A', card: '' });
     let events = [
-      { d: 'Sep 30 · 10:45 AM', e: 'In flight', w: 'Flight LA8045 · EZE → GRU', dot: '#FFFFFF', ring: '2px solid #3B1A8E', ic: '#3B1A8E', glyph: '✈', lineC: '#D5D4E1', card: '' },
+      { d: 'Sep 30 · 10:45 AM', e: 'In flight', w: 'Flight CP8045 · EZE → GRU', dot: '#FFFFFF', ring: '2px solid #3B1A8E', ic: '#3B1A8E', glyph: '✈', lineC: '#D5D4E1', card: '' },
       ok('Sep 30 · 6:20 AM', 'Cargo loaded', L),
       ok('Sep 30 · 1:30 AM', 'Cargo processed for dispatch', L),
       ok('Sep 29 · 10:15 PM', 'Entered logistics center', L),
       ok('Sep 29 · 6:40 PM', 'Cargo picked up at origin', 'Ezeiza, Buenos Aires'),
-      ok('Sep 29 · 2:20 PM', 'Booking confirmed', 'AWB 045-12345678')
+      ok('Sep 29 · 2:20 PM', 'Booking confirmed', 'AWB 000-12345678')
     ];
     if (delay) events = [{ d: 'Sep 30 · 11:30 AM', e: 'Arrival delayed', w: 'São Paulo (GRU), Brazil', dot: '#F2A51C', ring: '0', ic: '#FFFFFF', glyph: '!', lineC: '#D5D4E1', card: 'Congestion on the GRU apron. No action needed on your side.' }, ...events];
     events = events.map((e, i, a) => ({ ...e, line: i < a.length - 1 }));

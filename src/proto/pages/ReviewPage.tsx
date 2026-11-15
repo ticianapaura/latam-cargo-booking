@@ -32,7 +32,7 @@ export default function ReviewPage() {
         ["Origin", placeName(b.originAirport)],
         ["Destination", placeName(b.destAirport)],
         ["Pickup", `${fmtDate(b.pickupDate)} · ${fmtTime(b.pickupTime)}`],
-        ["Flight", "LA8045"],
+        ["Flight", "CP8045"],
         ["Estimated delivery", deliveryEstimate(b)],
       ],
     },

@@ -33,10 +33,6 @@
 /* ---- header ---- */
 .p-header { height: 60px; flex: none; background: var(--p-night); color: #fff; display: flex; align-items: center; gap: 24px; padding: 0 28px 0 24px; position: relative; z-index: 30; }
 .p-logo { display: flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: #fff; }
-.p-logo-bars { display: flex; flex-direction: column; gap: 2px; }
-.p-logo-bars i { display: block; height: 3px; border-radius: 2px; background: #e3194e; transform: skewX(-30deg); }
-.p-logo b { display: block; font-size: 16px; letter-spacing: 0.06em; line-height: 1; text-align: left; }
-.p-logo small { display: block; font-size: 10px; letter-spacing: 0.32em; color: #c9c7dd; }
 .p-head-right { margin-left: auto; display: flex; align-items: center; gap: 22px; font-size: 14px; color: #e9e8f5; }
 .p-head-right button { background: none; border: 0; padding: 4px 2px; color: inherit; border-radius: 4px; }
 .p-head-right button:hover { color: #fff; text-decoration: underline; }

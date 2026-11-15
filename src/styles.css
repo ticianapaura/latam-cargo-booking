@@ -1,4 +1,4 @@
-/* LATAM Cargo · booking flows — app shell (index + flow player).
+/* CargoPilot AI · booking flows — app shell (index + flow player).
    The screens themselves carry their own inline styles, generated from the design canvas. */
 
 :root {
@@ -41,18 +41,13 @@ a { color: var(--indigo); }
 
 .hero { background: var(--night); color: var(--white); border-radius: 18px; padding: clamp(28px, 5vw, 56px); margin-bottom: 56px; }
 .brand { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #c9c7dd; }
-.logo { display: inline-flex; align-items: center; gap: 9px; text-transform: none; letter-spacing: 0; }
-.logo-bars { display: flex; flex-direction: column; gap: 3px; }
-.logo-bars i { display: block; height: 4px; border-radius: 2px; background: var(--coral); transform: skewX(-30deg); }
-.logo-word { display: flex; flex-direction: column; line-height: 1; }
-.logo-word b { font-size: 19px; letter-spacing: 0.06em; color: var(--white); }
-.logo-word small { font-size: 10px; letter-spacing: 0.34em; margin-top: 3px; }
 .hero h1 { font-family: var(--display); font-stretch: 112%; font-weight: 800; font-size: clamp(34px, 5.4vw, 60px); line-height: 1.02; letter-spacing: -0.03em; margin: 40px 0 18px; max-width: 16ch; text-wrap: balance; }
 .lead { font-size: 19px; line-height: 1.55; color: #c9c7dd; max-width: 62ch; margin: 0; }
 .stats { display: flex; gap: 40px; flex-wrap: wrap; margin: 32px 0 0; padding-top: 22px; border-top: 1px solid #4a4867; }
 .stats div { display: flex; flex-direction: column; }
 .stats dt { font-family: var(--display); font-stretch: 112%; font-weight: 700; font-size: 38px; line-height: 1; }
 .stats dd { margin: 4px 0 0; color: #c9c7dd; font-size: 14px; }
+.status { margin: 22px 0 0; padding: 12px 16px; border-radius: 10px; border: 1px solid #4a4867; color: #e9e8f5; font-size: 15px; line-height: 1.5; max-width: 72ch; }
 .how { margin: 26px 0 0; padding: 14px 16px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: #e9e8f5; font-size: 15px; line-height: 1.5; max-width: 72ch; }
 
 .group { margin-bottom: 52px; }

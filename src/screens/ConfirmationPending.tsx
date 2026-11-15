@@ -1,5 +1,6 @@
-// Generated from the LATAM Cargo design canvas by tools/convert.py. Edit the canvas, then regenerate.
+// Generated from the design canvas by tools/convert.py, with the CargoPilot AI brand applied. Edit the canvas, then regenerate.
 import { Fragment } from "react";
+import { BrandMark } from "../brand";
 
 export type ConfirmationPendingProps = Record<string, never>;
 
@@ -9,21 +10,7 @@ export default function ConfirmationPending() {
   return (
     <div style={{ width: "1400px", minHeight: "1001px", boxSizing: "border-box", lineHeight: "1.3", background: "#FFFFFF", color: "#1A1831", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: "15px", display: "flex", flexDirection: "column" }}>
       <header style={{ height: "60px", flex: "none", background: "#1B1A31", color: "#FFFFFF", display: "flex", alignItems: "center", gap: "24px", padding: "0 28px 0 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ display: "block", width: "14px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "18px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "12px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: "700", fontSize: "16px", letterSpacing: "0.06em", lineHeight: "1" }}>
-              LATAM
-            </div>
-            <div style={{ fontSize: "10px", letterSpacing: "0.32em", color: "#C9C7DD" }}>
-              CARGO
-            </div>
-          </div>
-        </div>
+        <BrandMark />
         <div style={{ marginLeft: "70px", width: "440px", height: "38px", borderRadius: "7px", background: "#FFFFFF", display: "flex", alignItems: "center", gap: "10px", padding: "0 12px", color: "#8D8BA4", fontSize: "14px" }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
@@ -142,7 +129,7 @@ export default function ConfirmationPending() {
                     AWB
                   </span>
                   <strong style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "28px", fontWeight: "500", letterSpacing: "0.02em" }}>
-                    045-38216074
+                    000-38216074
                   </strong>
                 </div>
                 <div role="status" style={{ display: "flex", gap: "12px", padding: "14px 16px", borderRadius: "8px", border: "1px solid #FBE3B0", background: "#FFFAEB", color: "#A04305", fontSize: "14.5px" }}>
@@ -163,7 +150,7 @@ export default function ConfirmationPending() {
                       Route
                     </div>
                     <div style={{ marginTop: "2px" }}>
-                      EZE → GRU · Flight LA8047
+                      EZE → GRU · Flight CP8047
                     </div>
                   </div>
                   <div>
@@ -247,7 +234,7 @@ export default function ConfirmationPending() {
           <footer style={{ marginTop: "auto", flex: "none", background: "#F5F5F9", borderTop: "1px solid #E7E6F0", padding: "24px 52px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "24px", fontSize: "13.5px", color: "#5E5C76" }}>
             <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
               <span style={{ fontWeight: "600", color: "#1A1831" }}>
-                LATAM Cargo
+                CargoPilot AI
               </span>
               <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
                 Help center

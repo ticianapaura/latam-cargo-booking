@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { FLOWS, GROUPS, REEL } from "./flows";
+import { BRAND, BrandMark } from "./brand";
 import type { Flow } from "./flows";
 import { Prototype, StaticPrototype, presetBooking, presetUi } from "./proto/Prototype";
 import { INITIAL_UI } from "./proto/store";
@@ -100,14 +101,18 @@ function Index() {
         </div>
         <h1>Booking air cargo with no surprises at the last step</h1>
         <p className="lead">
-          A five-step booking flow for LATAM Cargo, built from the design case study. Every flow below is
-          playable: pick one, follow it screen by screen, and come back here to try another.
+          A five-step air cargo booking flow for CargoPilot AI, a fictional product, built from my design case study.
+          Every flow below is playable: pick one, follow it screen by screen, and come back here to try another.
         </p>
         <dl className="stats">
           <div><dt>{FLOWS.length}</dt><dd>flows</dd></div>
           <div><dt>{GROUPS.length}</dt><dd>groups</dd></div>
           <div><dt>{total}</dt><dd>screens to walk</dd></div>
         </dl>
+        <p className="status">
+          <b>Mock mode, no AI features yet.</b> The agent path from the case study is being added step by step. It will run
+          on fixed rules and synthetic data, with no language model, and it will say so on screen.
+        </p>
         <p className="how">
           <b>How to use it:</b> open a flow, then click the highlighted button on the screen, use Next, or press
           the ← → keys. “All flows” takes you back here at any point.
@@ -154,8 +159,8 @@ function Index() {
       <footer className="index-foot">
         <p>
           Design and front end by <a href="https://ticianapaura.github.io/">Ticiana Paura</a>. Case study on{" "}
-          <a href="https://www.behance.net/ticianne" target="_blank" rel="noopener">Behance</a>. Concept project,
-          not affiliated with LATAM Airlines Group.
+          <a href="https://www.behance.net/ticianne" target="_blank" rel="noopener">Behance</a>. Concept project:
+          CargoPilot AI is fictional, and its flights, prices and bookings are synthetic.
         </p>
       </footer>
     </main>
@@ -229,9 +234,9 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
   }, [go, step]);
 
   useEffect(() => {
-    document.title = `${flow.title} · LATAM Cargo booking`;
+    document.title = `${flow.title} · ${BRAND}`;
     return () => {
-      document.title = "LATAM Cargo · New booking flows";
+      document.title = `${BRAND} · Booking flows`;
     };
   }, [flow]);
 
@@ -342,19 +347,7 @@ function Embed() {
 }
 
 function Logo() {
-  return (
-    <span className="logo" aria-label="LATAM Cargo">
-      <span className="logo-bars" aria-hidden="true">
-        <i style={{ width: 14 }} />
-        <i style={{ width: 18 }} />
-        <i style={{ width: 12 }} />
-      </span>
-      <span className="logo-word">
-        <b>LATAM</b>
-        <small>CARGO</small>
-      </span>
-    </span>
-  );
+  return <BrandMark size={18} />;
 }
 
 export default function App() {

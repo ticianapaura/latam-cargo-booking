@@ -1,4 +1,4 @@
-// Generated from the LATAM Cargo design canvas by tools/convert.py. Edit the canvas, then regenerate.
+// Generated from the design canvas by tools/convert.py, with the CargoPilot AI brand applied. Edit the canvas, then regenerate.
 import { Fragment } from "react";
 import RouteDates from "./RouteDates";
 

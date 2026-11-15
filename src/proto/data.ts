@@ -299,14 +299,14 @@ export const placeName = (code: string) => {
 export type Row = { id: string; status: "Confirmed" | "In transit" | "Delivered" | "Cancelled" | "Draft"; sub: string; cargo: string; route: string; awb: string; action: string };
 
 export const BOOKINGS: Row[] = [
-  { id: "#1235", status: "Confirmed", sub: "Pickup Nov 11 · tracking starts then", cargo: "Perishables · Fresh salmon", route: "EZE → GRU", awb: "045-38216074", action: "View booking" },
-  { id: "#1234", status: "In transit", sub: "Flight LA8045", cargo: "Perishables · Fresh salmon", route: "EZE → GRU", awb: "045-12345678", action: "Track" },
-  { id: "#1229", status: "Delivered", sub: "Oct 18, 2026", cargo: "General cargo · Auto parts", route: "SCL → MIA", awb: "045-12298811", action: "View" },
+  { id: "#1235", status: "Confirmed", sub: "Pickup Nov 11 · tracking starts then", cargo: "Perishables · Fresh salmon", route: "EZE → GRU", awb: "000-38216074", action: "View booking" },
+  { id: "#1234", status: "In transit", sub: "Flight CP8045", cargo: "Perishables · Fresh salmon", route: "EZE → GRU", awb: "000-12345678", action: "Track" },
+  { id: "#1229", status: "Delivered", sub: "Oct 18, 2026", cargo: "General cargo · Auto parts", route: "SCL → MIA", awb: "000-12298811", action: "View" },
   { id: "#1221", status: "Cancelled", sub: "By you · Oct 2, 2026", cargo: "Pharmaceuticals · Vaccines", route: "EZE → LIM", awb: "—", action: "View" },
 ];
 
 /** Bookings that exist but belong to another company account */
-export const OTHER_ACCOUNT = ["#1198", "045-11980042"];
+export const OTHER_ACCOUNT = ["#1198", "000-11980042"];
 
 export type SearchResult =
   | { kind: "recent" }
@@ -329,7 +329,7 @@ export function search(qRaw: string, submitted: boolean): SearchResult {
   if (!submitted) return { kind: "suggest", rows: [] };
   const digits = bare.replace(/\D/g, "");
   const hint = /^\d{3}-?\d/.test(bare) && digits.length !== 11
-    ? `AWB numbers have 11 digits, like 045-12345678. You entered ${digits.length}. You can also search by booking number, like #1234.`
-    : "Check the number, or search by booking number, like #1234, or AWB, like 045-12345678.";
+    ? `AWB numbers have 11 digits, like 000-12345678. You entered ${digits.length}. You can also search by booking number, like #1234.`
+    : "Check the number, or search by booking number, like #1234, or AWB, like 000-12345678.";
   return { kind: "none", q, hint };
 }

@@ -7,7 +7,7 @@ import { BookingHead, I, Icon, Shell, Summary } from "../ui";
 export default function ConfirmationPage() {
   const { b, go, toast } = useProto();
   const [copied, setCopied] = useState(false);
-  const awb = "045-38216074";
+  const awb = "000-38216074";
   const missing = DOCS.filter((d) => !d.optional && (!b.docs[d.id] || b.docs[d.id]!.error));
 
   const copy = async () => {
@@ -44,7 +44,7 @@ export default function ConfirmationPage() {
             <button type="button" className="p-link" style={{ marginLeft: "auto" }} onClick={copy}>{copied ? "Copied" : "Copy"}</button>
           </div>
           <dl className="p-card p-kv" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", margin: 0 }}>
-            <div><dt>Route</dt><dd>{b.originAirport} → {b.destAirport} · Flight LA8045</dd></div>
+            <div><dt>Route</dt><dd>{b.originAirport} → {b.destAirport} · Flight CP8045</dd></div>
             <div><dt>Pickup</dt><dd>{fmtDate(b.pickupDate)} · {fmtTime(b.pickupTime)}</dd></div>
             <div><dt>Estimated delivery</dt><dd>{deliveryEstimate(b)}</dd></div>
             <div><dt>Estimated total</dt><dd>{usd(rate(b).total)}</dd></div>

@@ -34,7 +34,7 @@ export default function BookingsPage() {
           <Icon d={I.checkCircle} size={20} />
           <div style={{ flex: 1 }}>
             <b style={{ marginBottom: 0 }}>Booking #1235 confirmed</b>
-            AWB 045-38216074. Tracking starts once we pick up the cargo on Nov 11.
+            AWB 000-38216074. Tracking starts once we pick up the cargo on Nov 11.
           </div>
           <button type="button" className="p-search-clear" aria-label="Dismiss" onClick={() => setUi({ confirmed: false })}><Icon d={I.x} size={16} /></button>
         </div>

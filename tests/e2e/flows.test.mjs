@@ -45,6 +45,8 @@ describe("index", () => {
     const { page, errors } = await open();
     assert.equal(await page.locator(".card").count(), EXPECTED_FLOWS);
     assert.equal(await page.locator(".group").count(), 6);
+    assert.doesNotMatch(await page.innerText("body"), /LATAM/);
+    assert.match(await page.innerText("body"), /Mock mode, no AI features yet/);
     assert.deepEqual(errors, []);
     await page.close();
   });
@@ -73,6 +75,10 @@ describe("every step of every flow", () => {
         if (cur !== n) problems.push(`${id}/${n}: shows step ${cur}`);
         const visible = await page.locator(".screen > *").count();
         if (!visible) problems.push(`${id}/${n}: empty screen`);
+        // Brand guard: the prototype is CargoPilot AI; no real airline's name, flight codes or AWB prefix
+        const text = await page.innerText("body");
+        const leak = text.match(/LATAM|\bLA ?\d{4}\b|\b045-\d/);
+        if (leak) problems.push(`${id}/${n}: shows "${leak[0]}"`);
         // When the note says to click something, it must be highlighted on screen (unless it's disabled for now)
         const hint = await page.locator(".note .hint b").first().textContent().catch(() => null);
         if (hint) {
@@ -229,7 +235,7 @@ describe("search", () => {
     await input.click();
     await input.fill("#123");
     assert.equal(await page.locator(".p-result").count(), 2);
-    await input.fill("045-1234");
+    await input.fill("000-1234");
     await input.press("Enter");
     await page.waitForTimeout(900);
     assert.match(await page.innerText(".p-search-panel"), /No results/);
@@ -237,7 +243,7 @@ describe("search", () => {
     await input.press("Enter");
     await page.waitForTimeout(900);
     assert.match(await page.innerText(".p-search-panel"), /can’t see booking #1198/);
-    await input.fill("045-12345678");
+    await input.fill("000-12345678");
     await page.click("button:has-text('Open tracking')");
     await page.waitForTimeout(200);
     assert.deepEqual(await count(page), [5, 5]);

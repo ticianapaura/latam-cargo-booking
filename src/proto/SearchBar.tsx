@@ -135,7 +135,7 @@ export function SearchBar() {
     panel = (
       <>
         <ResultList title="Recent searches" rows={RECENT} active={active} onPick={open_} />
-        <div className="p-hint-row">Search by booking number, like #1234, or AWB, like 045-12345678.</div>
+        <div className="p-hint-row">Search by booking number, like #1234, or AWB, like 000-12345678.</div>
       </>
     );
   }

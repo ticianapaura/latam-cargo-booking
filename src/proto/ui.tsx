@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useProto } from "./store";
 import type { Page } from "./store";
 import { SearchBar } from "./SearchBar";
+import { BRAND, BrandMark } from "../brand";
 
 /* ---------- icons ---------- */
 
@@ -53,9 +54,8 @@ export function Shell({ active, children }: { active: "New booking" | "My bookin
   return (
     <>
       <header className="p-header">
-        <button type="button" className="p-logo" onClick={() => go("bookings")} aria-label="LATAM Cargo, go to My bookings">
-          <span className="p-logo-bars" aria-hidden="true"><i style={{ width: 14 }} /><i style={{ width: 18 }} /><i style={{ width: 12 }} /></span>
-          <span><b>LATAM</b><small>CARGO</small></span>
+        <button type="button" className="p-logo" onClick={() => go("bookings")} aria-label={`${BRAND}, go to My bookings`}>
+          <BrandMark />
         </button>
         <SearchBar />
         <div className="p-head-right">
@@ -77,7 +77,7 @@ export function Shell({ active, children }: { active: "New booking" | "My bookin
           <main className="p-main">{children}</main>
           <footer className="p-footer">
             <nav aria-label="Footer">
-              <b>LATAM Cargo</b>
+              <b>{BRAND}</b>
               <button type="button" onClick={() => soon("The help center")}>Help center</button>
               <button type="button" onClick={() => soon("Conditions of carriage")}>Conditions of carriage</button>
               <button type="button" onClick={() => soon("Privacy")}>Privacy</button>

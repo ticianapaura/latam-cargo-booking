@@ -31,6 +31,23 @@ SCREENS = {
 }
 NAME = {k: v[0] for k, v in SCREENS.items()}
 
+# The design canvas is the LATAM Cargo case study. The prototype is rebranded to the fictional
+# CargoPilot AI at generation time, so the canvas stays as it is.
+LOGO = re.compile(r'<div style="display: flex; align-items: center; gap: 8px"><div style="display: flex; flex-direction: column; gap: 2px">.*?CARGO</div></div></div>', re.S)
+BRAND = [
+    (re.compile(r"LATAM Cargo"), "CargoPilot AI"),
+    (re.compile(r"\bLA(\d{4})\b"), r"CP\1"),       # flight numbers: synthetic, not a real carrier's
+    (re.compile(r"\b045-(\d)"), r"000-\1"),          # AWB prefix 045 belongs to a real airline; 000 is unassigned
+]
+
+
+def rebrand(src):
+    src, n = LOGO.subn("<brand-mark></brand-mark>", src)
+    for rx, rep in BRAND:
+        src = rx.sub(rep, src)
+    return src
+
+
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 ATTR = {
     "class": "className", "for": "htmlFor", "tabindex": "tabIndex", "readonly": "readOnly",
@@ -158,6 +175,9 @@ def emit(node, ctx, ind):
         cond = ctx.ref(HOLE.search(attrs["value"]).group(1))
         body = "\n".join(kids(ctx))
         return f"{pad}{{{cond} && (\n{pad}  <>\n{body}\n{pad}  </>\n{pad})}}"
+    if tag == "brand-mark":
+        imports.add("BrandMark")
+        return f"{pad}<BrandMark />"
     if tag == "dc-import":
         comp = NAME[attrs["name"]]
         imports.add(comp)
@@ -214,7 +234,7 @@ def emit(node, ctx, ind):
 def convert(key):
     global imports
     imports = set()
-    s = (SRC / f"{key}.dc.html").read_text()
+    s = rebrand((SRC / f"{key}.dc.html").read_text())
     body = re.search(r"<x-dc>(.*)</x-dc>", s, re.S).group(1)
     script = re.search(r"data-dc-script[^>]*>(.*?)</script>", s, re.S).group(1)
     props_decl = json.loads(re.search(r"data-props='([^']*)'", s).group(1))
@@ -231,10 +251,10 @@ def convert(key):
     ptype = "{ " + "; ".join(
         f"{k}?: {' | '.join(json.dumps(o) for o in props_decl[k].get('options', [])) or 'string'}" for k in prop_names) + " }" if prop_names else "Record<string, never>"
     defaults = ", ".join(f"{k} = {json.dumps(props_decl[k].get('default'))}" for k in prop_names)
-    head = "// Generated from the LATAM Cargo design canvas by tools/convert.py. Edit the canvas, then regenerate.\n"
+    head = "// Generated from the design canvas by tools/convert.py, with the CargoPilot AI brand applied. Edit the canvas, then regenerate.\n"
     head += 'import { Fragment } from "react";\n'
     for i in sorted(imports):
-        head += f'import {i} from "./{i}";\n'
+        head += 'import { BrandMark } from "../brand";\n' if i == "BrandMark" else f'import {i} from "./{i}";\n'
     sig = f"{{ {defaults} }}: {comp}Props = {{}}" if prop_names else ""
     props_line = f"  const props = {{ {', '.join(prop_names)} }};\n" if prop_names else ""
     code = f"""{head}

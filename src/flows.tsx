@@ -108,7 +108,7 @@ export const FLOWS: Flow[] = [
     title: "Step 4 · No space and new rate",
     summary: "The flight filled up and the rate changed while the user was booking.",
     steps: [
-      { label: "Flight full, rate changed", note: "Flight LA8045 ran out of space, and LA8047 one day later has room. The rate also went up because of the weekly fuel adjustment, shown old and new side by side.", cta: "Use LA8047", render: () => <ReviewChanged /> },
+      { label: "Flight full, rate changed", note: "Flight CP8045 ran out of space, and CP8047 one day later has room. The rate also went up because of the weekly fuel adjustment, shown old and new side by side.", cta: "Use CP8047", render: () => <ReviewChanged /> },
       with_(S.review, { note: "With a new flight accepted, the user can confirm." }),
       with_(S.confirmed, { cta: undefined, note: "Booking confirmed." }),
     ],
@@ -193,10 +193,10 @@ export const FLOWS: Flow[] = [
     title: "Find a booking by number or AWB",
     summary: "From an empty search bar to the booking's tracking.",
     steps: [
-      { page: "bookings", label: "Search · default", note: "The search bar in the header, on every page. Click it and type: #123, 045-12345678 or #1198 all do something different." },
+      { page: "bookings", label: "Search · default", note: "The search bar in the header, on every page. Click it and type: #123, 000-12345678 or #1198 all do something different." },
       { page: "bookings", preset: { ui: { searchOpen: true } }, label: "Search · recent", note: "On focus, the last bookings searched and a tip on what can be searched." },
       { page: "bookings", preset: { ui: { searchOpen: true, q: "#123" } }, label: "Search · typing", note: "Typing “#123” suggests matching bookings, with the typed part in bold. Arrows move, Enter searches." },
-      { page: "bookings", preset: { ui: { searchOpen: true, q: "045-12345678" } }, label: "Search · exact match", note: "A full AWB finds one booking, with its status and key facts.", cta: "Open tracking" },
+      { page: "bookings", preset: { ui: { searchOpen: true, q: "000-12345678" } }, label: "Search · exact match", note: "A full AWB finds one booking, with its status and key facts.", cta: "Open tracking" },
       with_(S.tracking, { cta: undefined, note: "Open tracking goes straight to the booking." }),
     ],
   },
@@ -206,9 +206,9 @@ export const FLOWS: Flow[] = [
     title: "No results",
     summary: "An incomplete AWB, explained, with a way back.",
     steps: [
-      { page: "bookings", preset: { ui: { searchOpen: true, q: "045-1234", searchLoading: true } }, label: "Search · loading", note: "While searching, the bar shows a spinner and the list shows placeholders." },
-      { page: "bookings", preset: { ui: { searchOpen: true, q: "045-1234", searchSubmitted: true } }, label: "No results", note: "The AWB has 7 digits instead of 11. We say what format is expected and keep recent bookings at hand. Try completing the number." },
-      { page: "bookings", preset: { ui: { searchOpen: true, q: "045-12345678" } }, label: "Exact match", note: "Found.", cta: "Open tracking" },
+      { page: "bookings", preset: { ui: { searchOpen: true, q: "000-1234", searchLoading: true } }, label: "Search · loading", note: "While searching, the bar shows a spinner and the list shows placeholders." },
+      { page: "bookings", preset: { ui: { searchOpen: true, q: "000-1234", searchSubmitted: true } }, label: "No results", note: "The AWB has 7 digits instead of 11. We say what format is expected and keep recent bookings at hand. Try completing the number." },
+      { page: "bookings", preset: { ui: { searchOpen: true, q: "000-12345678" } }, label: "Exact match", note: "Found.", cta: "Open tracking" },
     ],
   },
   {

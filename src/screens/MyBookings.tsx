@@ -1,5 +1,6 @@
-// Generated from the LATAM Cargo design canvas by tools/convert.py. Edit the canvas, then regenerate.
+// Generated from the design canvas by tools/convert.py, with the CargoPilot AI brand applied. Edit the canvas, then regenerate.
 import { Fragment } from "react";
+import { BrandMark } from "../brand";
 
 export type MyBookingsProps = { search?: "default" | "recent" | "typing" | "match" | "loading" | "noresults" | "noaccess" | "offline" };
 
@@ -10,21 +11,7 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
   return (
     <div style={{ width: "1400px", minHeight: "734px", boxSizing: "border-box", lineHeight: "1.3", background: "#FFFFFF", color: "#1A1831", fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: "15px", display: "flex", flexDirection: "column" }}>
       <header style={{ height: "60px", flex: "none", background: "#1B1A31", color: "#FFFFFF", display: "flex", alignItems: "center", gap: "24px", padding: "0 28px 0 24px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <span style={{ display: "block", width: "14px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "18px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-            <span style={{ display: "block", width: "12px", height: "3px", borderRadius: "2px", background: "#E3194E", transform: "skewX(-30deg)" }} />
-          </div>
-          <div>
-            <div style={{ fontWeight: "700", fontSize: "16px", letterSpacing: "0.06em", lineHeight: "1" }}>
-              LATAM
-            </div>
-            <div style={{ fontSize: "10px", letterSpacing: "0.32em", color: "#C9C7DD" }}>
-              CARGO
-            </div>
-          </div>
-        </div>
+        <BrandMark />
         <div style={{ marginLeft: "70px", position: "relative", flex: "none" }}>
           {v.searchDefault && (
             <>
@@ -106,7 +93,7 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
                   ))}
                 </div>
                 <div style={{ borderTop: "1px solid #E7E6F0", marginTop: "10px", padding: "10px 8px 0", fontSize: "12.5px", color: "#8D8BA4" }}>
-                  Search by booking number, like #1234, or AWB, like 045-12345678.
+                  Search by booking number, like #1234, or AWB, like 000-12345678.
                 </div>
                 </>
               )}
@@ -167,7 +154,7 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
                     <div>
                       Flight
                       <div style={{ color: "#1A1831", fontWeight: "500", fontSize: "14px" }}>
-                        LA8045
+                        CP8045
                       </div>
                     </div>
                     <div>
@@ -223,11 +210,11 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
                   </span>
                   <div style={{ fontSize: "14px", lineHeight: "1.5", color: "#5E5C76" }}>
                     <div style={{ fontWeight: "600", color: "#1A1831", fontSize: "15px" }}>
-                      No results for “045-1234”
+                      No results for “000-1234”
                     </div>
                     {"AWB numbers have 11 digits, like "}
                     <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#1A1831" }}>
-                      045-12345678
+                      000-12345678
                     </span>
                     . You entered 7. You can also search by booking number, like #1234.
                   </div>
@@ -386,7 +373,7 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
                 <div style={{ fontWeight: "600" }}>
                   Booking #1235 confirmed
                 </div>
-                AWB 045-38216074. Tracking starts once we pick up the cargo on Nov 11.
+                AWB 000-38216074. Tracking starts once we pick up the cargo on Nov 11.
               </div>
             </div>
             <div style={{ border: "1px solid #D5D4E1", borderRadius: "8px", overflow: "hidden" }}>
@@ -444,7 +431,7 @@ export default function MyBookings({ search = "default" }: MyBookingsProps = {})
           <footer style={{ marginTop: "auto", flex: "none", background: "#F5F5F9", borderTop: "1px solid #E7E6F0", padding: "24px 52px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "24px", fontSize: "13.5px", color: "#5E5C76" }}>
             <div style={{ display: "flex", gap: "24px", alignItems: "center" }}>
               <span style={{ fontWeight: "600", color: "#1A1831" }}>
-                LATAM Cargo
+                CargoPilot AI
               </span>
               <a href="#" style={{ color: "inherit", textDecoration: "none" }}>
                 Help center
@@ -477,21 +464,21 @@ function values(props: MyBookingsProps) {
     const B = { pri: ['#3B1A8E', '#3B1A8E', '#ECE7FC'], ok: ['#17B26A', '#067647', '#ECFDF3'], mute: ['#D5D4E1', '#5E5C76', '#FFFFFF'] };
     const row = (id, st, k, sub, cargo, route, awb, act, op) => ({ id, st, sub, cargo, route, awb, act, op, bd: B[k][0], fg: B[k][1], bg: B[k][2] });
     const rows = [
-      row('#1235', 'Confirmed', 'pri', 'Pickup Nov 11 · tracking starts then', 'Perishables · Fresh salmon', 'EZE → GRU', '045-38216074', 'View booking', 1),
-      row('#1234', 'In transit', 'pri', 'Flight LA8045', 'Perishables · Fresh salmon', 'EZE → GRU', '045-12345678', 'Track', 1),
-      row('#1229', 'Delivered', 'ok', 'Oct 18, 2026', 'General cargo · Auto parts', 'SCL → MIA', '045-12298811', 'View', 1),
+      row('#1235', 'Confirmed', 'pri', 'Pickup Nov 11 · tracking starts then', 'Perishables · Fresh salmon', 'EZE → GRU', '000-38216074', 'View booking', 1),
+      row('#1234', 'In transit', 'pri', 'Flight CP8045', 'Perishables · Fresh salmon', 'EZE → GRU', '000-12345678', 'Track', 1),
+      row('#1229', 'Delivered', 'ok', 'Oct 18, 2026', 'General cargo · Auto parts', 'SCL → MIA', '000-12298811', 'View', 1),
       row('#1221', 'Cancelled', 'mute', 'By you · Oct 2, 2026', 'Pharmaceuticals · Vaccines', 'EZE → LIM', '—', 'View', 0.7)
     ];
     const S = props.search === 'focus' ? 'noresults' : (props.search || 'default');
     const C = { 'In transit': B.pri, 'Confirmed': B.pri, 'Delivered': B.ok };
     const r = (id, route, awb, st, m, hl) => ({ m: m || '', rest: m ? id.slice(m.length) : id, route, awb, st, hl: hl ? '#F5F3FF' : 'transparent', bd: C[st][0], fg: C[st][1], bg: C[st][2] });
-    const Q = { recent: '', typing: '#123', match: '045-12345678', loading: '045-38216074', noresults: '045-1234', noaccess: '#1198', offline: '#1234' };
+    const Q = { recent: '', typing: '#123', match: '000-12345678', loading: '000-38216074', noresults: '000-1234', noaccess: '#1198', offline: '#1234' };
     const q = Q[S] || '';
     const focus = S !== 'default';
     return { nav, rows, searchDefault: !focus, searchFocus: focus, q, hasQ: !!q, noQ: !q,
       spin: S === 'loading', clear: !!q && S !== 'loading', ring: S === 'offline' ? 'rgba(232, 68, 58, 0.35)' : 'rgba(185, 168, 255, 0.6)',
       pRecent: S === 'recent', pTyping: S === 'typing', pMatch: S === 'match', pLoading: S === 'loading', pNoResults: S === 'noresults', pNoAccess: S === 'noaccess', pOffline: S === 'offline',
-      recent: [r('#1234', 'EZE → GRU', '045-12345678', 'In transit'), r('#1235', 'EZE → GRU', '045-38216074', 'Confirmed'), r('#1229', 'SCL → MIA', '045-12298811', 'Delivered')],
-      recent2: [r('#1234', 'EZE → GRU', '045-12345678', 'In transit'), r('#1235', 'EZE → GRU', '045-38216074', 'Confirmed')],
-      sugg: [r('#1234', 'EZE → GRU', '045-12345678', 'In transit', '#123', true), r('#1235', 'EZE → GRU', '045-38216074', 'Confirmed', '#123')] };
+      recent: [r('#1234', 'EZE → GRU', '000-12345678', 'In transit'), r('#1235', 'EZE → GRU', '000-38216074', 'Confirmed'), r('#1229', 'SCL → MIA', '000-12298811', 'Delivered')],
+      recent2: [r('#1234', 'EZE → GRU', '000-12345678', 'In transit'), r('#1235', 'EZE → GRU', '000-38216074', 'Confirmed')],
+      sugg: [r('#1234', 'EZE → GRU', '000-12345678', 'In transit', '#123', true), r('#1235', 'EZE → GRU', '000-38216074', 'Confirmed', '#123')] };
 }

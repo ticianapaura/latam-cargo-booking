@@ -1,10 +1,12 @@
-# LATAM Cargo · New booking flows
+# CargoPilot AI · Booking flows
 
-Playable front end of a five-step **air cargo booking flow**: the happy path, inline errors on every step, interruptions, tracking exceptions and search. Built in React + TypeScript from my design case study.
+Playable front end of a five-step **air cargo booking flow** for CargoPilot AI, a fictional product: the happy path, inline errors on every step, interruptions, tracking exceptions and search. Built in React + TypeScript from my design case study.
 
 **[▶ Live demo](https://ticianapaura.github.io/latam-cargo-booking/)** · [Case study on Behance](https://www.behance.net/ticianne) · [Portfolio](https://ticianapaura.github.io/)
 
-> Concept project. Not affiliated with LATAM Airlines Group.
+> **Concept project.** CargoPilot AI is a fictional brand. Flights (CP…), air waybills (000-…), prices and bookings are synthetic. The design case study it comes from was made for LATAM Cargo; this prototype is not affiliated with LATAM Airlines Group.
+>
+> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step and will run on fixed rules and synthetic data, with no language model.
 
 ## How to navigate
 
@@ -47,7 +49,7 @@ Leaving halfway, a failed save and an expired session. The draft is never lost.
 
 | Flow | What happens | Screens |
 |---|---|---|
-| [Leaving mid-booking](https://ticianapaura.github.io/latam-cargo-booking/#/flow/leave-with-changes/1) | The user tries to leave Step 1 with unsaved changes. | Cargo type · ready → Leave dialog → Cargo type · ready |
+| [Leaving mid-booking](https://ticianapaura.github.io/latam-cargo-booking/#/flow/leave-with-changes/1) | The user tries to leave Step 1 with unsaved changes. | Cargo type · ready → Leave dialog → Draft in My bookings |
 | [Save fails on our side](https://ticianapaura.github.io/latam-cargo-booking/#/flow/save-error/1) | Step 2 can't be saved because of a problem on our end. | Route and dates → Save error → Documents |
 | [Session expired](https://ticianapaura.github.io/latam-cargo-booking/#/flow/session-expired/1) | 30 minutes without activity on Step 3. | Documents → Session expired → Documents |
 
@@ -75,7 +77,7 @@ No results, someone else's booking and no connection.
 
 | Flow | What happens | Screens |
 |---|---|---|
-| [No results](https://ticianapaura.github.io/latam-cargo-booking/#/flow/search-no-results/1) | An incomplete AWB, explained, with a way back. | Search · loading → No results → Search · typing → Exact match |
+| [No results](https://ticianapaura.github.io/latam-cargo-booking/#/flow/search-no-results/1) | An incomplete AWB, explained, with a way back. | Search · loading → No results → Exact match |
 | [Booking from another account](https://ticianapaura.github.io/latam-cargo-booking/#/flow/search-no-access/1) | The booking exists, but the user can't see it. | Search · recent → No access |
 | [Search with no connection](https://ticianapaura.github.io/latam-cargo-booking/#/flow/search-offline/1) | The search can't run, but recent bookings still work. | Offline → Search · recent |
 
@@ -84,7 +86,7 @@ No results, someone else's booking and no connection.
 - **React 19 + TypeScript**, bundled with **esbuild** into `assets/`, so GitHub Pages serves the repo root with no build step on the server.
 - **The live app** (`src/proto/`) is a working version of the booking: real form controls (an accessible dropdown with keyboard support, unit selectors, chips, text areas with a character counter, date picker, file upload), the validation rules and error copy from the case study, a live booking summary and rate, the header search with suggestions, loading, no results, no access and offline, the "Leave this booking?" guard and My bookings filters.
 - **Flows** (`src/flows.tsx`) are plain data: each step opens a page of the live app with a preset of data and state (for example, Step 1 with the invalid values that trigger the error summary). Navigating inside the app moves the flow along when that page is part of it. Adding a flow means adding an entry, and it shows up in the index automatically.
-- **Design screens** (`src/screens/`) are generated from the design canvas with `tools/convert.py`. The tracking screens and two edge cases (flight full, session expired) are shown from there, wired to the menu and tabs.
+- **Design screens** (`src/screens/`) are generated from the design canvas with `tools/convert.py`, which also applies the CargoPilot AI brand (mark, name, flight and AWB codes), so the original LATAM Cargo canvas stays untouched. The tracking screens and two edge cases (flight full, session expired) are shown from there, wired to the menu and tabs.
 - **Routing** uses the URL hash (`#/flow/<id>/<step>`), so every screen has a shareable link and the browser's back button works.
 - `?embed=1` plays an autoplay reel of the key screens, used for the preview in my portfolio.
 
@@ -93,6 +95,7 @@ src/
   main.tsx          entry point
   App.tsx           index of flows, flow player, routing, embed reel
   flows.tsx         every flow, grouped like the flow map
+  brand.tsx         the CargoPilot AI mark (fictional brand)
   proto/            the live booking app
     data.ts         booking data, options, validation rules, rate and search
     ui.tsx          shell, stepper, fields, dropdown, chips, summary
