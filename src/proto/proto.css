@@ -507,11 +507,16 @@
 .a-banner > svg { flex: none; }
 
 /* activity log */
-.a-log summary { cursor: pointer; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; list-style: none; }
+.a-log summary { cursor: pointer; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; list-style: none; border-radius: 8px; }
 .a-log summary::-webkit-details-marker { display: none; }
-.a-log summary::before { content: "▸"; color: var(--p-muted); }
-.a-log[open] summary::before { content: "▾"; }
 .a-log[open] summary { margin-bottom: 14px; }
+/* A real disclosure control: a round chevron button that turns when open, and the action in words */
+.a-disclosure { width: 32px; height: 32px; flex: none; border-radius: 50%; border: 1.5px solid var(--p-line); background: #fff; color: var(--p-indigo); display: flex; align-items: center; justify-content: center; transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease; }
+.a-log summary:hover .a-disclosure { border-color: var(--p-indigo); background: var(--p-indigo-soft); }
+.a-log[open] .a-disclosure { transform: rotate(90deg); background: var(--p-indigo-soft); border-color: var(--p-indigo); }
+.a-disclosure-text { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--p-indigo); }
+.a-log summary:hover .a-disclosure-text { text-decoration: underline; }
+@media (prefers-reduced-motion: reduce) { .a-disclosure { transition: none; } }
 .a-log-list { list-style: none; margin: 0; padding: 0; max-height: 460px; overflow: auto; font-size: 13.5px; }
 .a-log-list li { display: grid; grid-template-columns: 34px 70px 86px minmax(0, 1fr); gap: 10px; padding: 7px 4px; border-bottom: 1px solid var(--p-line-soft); align-items: baseline; }
 .a-log-seq, .a-log-time { color: var(--p-faint); font-size: 12.5px; }

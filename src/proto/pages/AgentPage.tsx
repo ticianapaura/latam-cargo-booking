@@ -1249,8 +1249,12 @@ function ActivityLog({ st, open, onToggle, innerRef }: { st: AgentState; open: b
   return (
     <details className="a-card a-log" open={open} ref={innerRef} onToggle={(e) => onToggle((e.target as HTMLDetailsElement).open)}>
       <summary>
+        <span className="a-disclosure" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
         <span className="a-h2">Activity log</span>
         <span className="a-count">{st.log.length} entries · every tool call, decision and approval, in order</span>
+        <span className="a-disclosure-text">{open ? "Hide" : "Show"}</span>
       </summary>
       <div className="p-tabs" role="tablist" aria-label="Filter the log">
         {(["all", "people", "tools"] as const).map((f) => (
