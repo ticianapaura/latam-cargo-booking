@@ -34,11 +34,29 @@ export class ApiError extends Error {
   }
 }
 
+/* Each service departs at a fixed time of day, from the first day it can carry the cargo:
+   Express the first day, Standard a day later, Economy two days later with one connection. */
 const SERVICES = [
-  { service: "Express" as const, dayOffset: 0, depart: 18 * 60 + 40, transit: 30, stops: 0, factor: 1.35, cap: 900 },
-  { service: "Standard" as const, dayOffset: 1, depart: 9 * 60 + 15, transit: 46, stops: 0, factor: 1.0, cap: 1800 },
-  { service: "Economy" as const, dayOffset: 2, depart: 22 * 60 + 5, transit: 70, stops: 1, factor: 0.82, cap: 3000 },
+  { service: "Express" as const, dayOffset: 0, depart: 18 * 60 + 40, stops: 0, factor: 1.35, cap: 900 },
+  { service: "Standard" as const, dayOffset: 1, depart: 9 * 60 + 15, stops: 0, factor: 1.0, cap: 1800 },
+  { service: "Economy" as const, dayOffset: 2, depart: 22 * 60 + 5, stops: 1, factor: 0.82, cap: 3000 },
 ];
+
+/** Approximate airport positions, for flight times that follow the distance */
+const COORDS: Record<string, [number, number]> = {
+  EZE: [-34.82, -58.54], AEP: [-34.56, -58.42], COR: [-31.32, -64.21], MDZ: [-32.83, -68.79], GRU: [-23.43, -46.47],
+  VCP: [-23.01, -47.13], GIG: [-22.81, -43.25], SCL: [-33.39, -70.79], LIM: [-12.02, -77.11], MIA: [25.79, -80.29],
+};
+export const HANDLING_HOURS = 3; // from pickup to the earliest departure: road leg, acceptance and security
+export const DELIVERY_HOURS = 4; // from landing to delivery at the address
+const CONNECTION_HOURS = 3;
+
+function airHours(a: string, b: string) {
+  const [la1, lo1] = COORDS[a].map((x) => (x * Math.PI) / 180);
+  const [la2, lo2] = COORDS[b].map((x) => (x * Math.PI) / 180);
+  const km = 6371 * 2 * Math.asin(Math.sqrt(Math.sin((la2 - la1) / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin((lo2 - lo1) / 2) ** 2));
+  return Math.round((km / 780 + 0.5) * 4) / 4; // cruise ~780 km/h plus taxi and climb, to the quarter hour
+}
 
 export class MockCarrierApi {
   faults: Faults;
@@ -52,24 +70,31 @@ export class MockCarrierApi {
     this.faults = { ...faults };
   }
 
-  search(origin: string, dest: string, fromDate: string, kg: number): Flight[] {
+  /** Flights from the first departure at or after `earliest` (pickup time plus handling) */
+  search(origin: string, dest: string, fromDate: string, kg: number, earliest = `${fromDate}T06:00:00Z`): Flight[] {
     if (this.take("searchFailures")) throw new ApiError("SEARCH_UNAVAILABLE", "The flight search didn't answer.");
     if (this.faults.noFlights) return [];
     if (!airport(origin) || !airport(dest)) throw new ApiError("BAD_INPUT", "Unknown airport.");
     const rnd = seeded(`${origin}-${dest}-${fromDate}`);
     const base = Date.parse(`${fromDate}T00:00:00Z`);
+    const ready = Date.parse(earliest) + HANDLING_HOURS * HOUR;
     const until = iso(this.clock.now() + 30 * MIN);
     return SERVICES.map((s) => {
-      const departs = base + s.dayOffset * DAY + s.depart * MIN + Math.floor(rnd() * 4) * 5 * MIN;
-      const transit = s.transit + Math.floor(rnd() * 4);
+      let departs = base + s.dayOffset * DAY + s.depart * MIN + Math.floor(rnd() * 4) * 5 * MIN;
+      while (departs < ready) departs += DAY; // never before the cargo can be at the airport
+      const flight = airHours(origin, dest) + (s.stops ? CONNECTION_HOURS + 0.75 : 0);
+      const arrives = departs + flight * HOUR;
+      const deliveredBy = arrives + DELIVERY_HOURS * HOUR;
       return {
-        id: `F-${hash(`${origin}${dest}${fromDate}${s.service}`)}`,
+        id: `F-${hash(`${origin}${dest}${iso(departs)}${s.service}`)}`,
         flightNo: `CP${8000 + Math.floor(rnd() * 900) + s.dayOffset}`,
         origin,
         dest,
         departs: iso(departs),
-        arrives: iso(departs + transit * HOUR),
-        transitHours: transit,
+        arrives: iso(arrives),
+        deliveredBy: iso(deliveredBy),
+        transitHours: Math.round((deliveredBy - departs) / HOUR),
+        flightHours: flight,
         stops: s.stops,
         service: s.service,
         capacityKg: s.cap,

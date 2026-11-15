@@ -255,14 +255,21 @@ test("over budget: Manager rejection → re-plan without that flight", async () 
   assert.equal(ledger.count(), 0);
 });
 
-test("late arrival: a deadline exception the user accepts as part of their approval", async () => {
+test("late arrival: approving requires accepting it explicitly, by its id", async () => {
   const { agent, ledger } = setup();
-  await agent.submitGoal(`${SALMON}, cheapest, deliver before Friday`); // Friday 00:00: every option is late
+  await agent.submitGoal(`${SALMON}, cheapest, deliver before Thursday`); // Thursday 00:00: every option is delivered later
   await details(agent);
   const p = agent.state.proposal!;
-  assert.equal(p.option.exceptions[0]?.kind, "deadline", "only late options, so the cheapest late one is proposed");
+  const late = p.option.exceptions[0];
+  assert.equal(late?.kind, "deadline", "only late options, so the cheapest late one is proposed");
   assert.equal(agent.state.status, "awaiting_approval");
-  await agent.approve();
+  await agent.approve(); // approving without accepting the late delivery
+  assert.equal(agent.state.status, "awaiting_approval");
+  assert.match(types(agent, "denied").at(-1)!.summary, /accepted explicitly/);
+  assert.equal(agent.state.approvals.length, 0);
+  await agent.approve("coordinator", ["EX-not-this-one"]);
+  assert.equal(agent.state.approvals.length, 0, "accepting something else doesn't count");
+  await agent.approve("coordinator", [late.id]);
   assert.equal(agent.state.status, "confirmed");
   assert.ok(agent.state.approvals.some((a) => a.kind === "exception" && a.by === "coordinator"));
   assert.equal(ledger.count(), 1);
@@ -320,10 +327,11 @@ test("space released at confirmation: searched again, new version, approval agai
   await agent.submitGoal(SALMON);
   await details(agent);
   api.faults.expireBeforeConfirm = true;
+  const searches = calls(agent, "searchAvailableFlights").length;
   await agent.approve();
   assert.equal(agent.state.status, "awaiting_approval");
   assert.equal(agent.state.proposal!.version, 2);
-  assert.equal(calls(agent, "searchAvailableFlights").length, 2);
+  assert.equal(calls(agent, "searchAvailableFlights").length, searches + 1);
   assert.equal(ledger.count(), 0);
 });
 
@@ -349,13 +357,14 @@ test("edited field after an approval: re-plans and voids the approval", async ()
   await agent.approve();
   assert.equal(agent.state.status, "failed");
   assert.equal(ledger.count(), 0);
+  const searches = calls(agent, "searchAvailableFlights").length;
   await agent.setField("pieces", 12, "edit");
   assert.equal(agent.state.status, "awaiting_approval");
   assert.equal(agent.state.proposal!.version, 2);
   assert.ok(agent.state.proposal!.changes.includes("Number of pieces changed"));
   assert.ok(types(agent, "invalidation").some((l) => /v1 was approved/.test(l.summary)));
   // re-searched and re-quoted with the new weight
-  assert.equal(calls(agent, "searchAvailableFlights").length, 2);
+  assert.equal(calls(agent, "searchAvailableFlights").length, searches + 1);
 });
 
 test("a read-only tool that keeps failing: 3 attempts, then Failed with Retry", async () => {
@@ -589,4 +598,68 @@ test("the plan shows which task is running", async () => {
   await agent.submitGoal(SALMON);
   for (const id of ["validate", "restrictions", "search", "rates", "compare"]) assert.ok(seen.has(id), id);
   assert.ok(!agent.plan().some((x) => x.status === "running"), "nothing running once it stops");
+});
+
+/* ---------- checklist: data coherence, explanations, consistent counters ---------- */
+
+test("flights never leave before the cargo is ready, and times follow the route", async () => {
+  const { agent } = setup();
+  await agent.submitGoal(SALMON);
+  await details(agent); // pickup at 10:00 on Nov 11
+  const ready = Date.parse("2026-11-11T10:00:00Z") + 3 * 3_600_000;
+  for (const o of agent.state.options) {
+    const f = o.flight;
+    assert.ok(Date.parse(f.departs) >= ready, `${f.flightNo} departs ${f.departs}, before the cargo is ready`);
+    assert.ok(f.arrives > f.departs && f.deliveredBy > f.arrives);
+    assert.equal(Date.parse(f.arrives) - Date.parse(f.departs), f.flightHours * 3_600_000);
+  }
+  const express = agent.state.options.find((o) => o.flight.service === "Express")!.flight;
+  assert.ok(express.flightHours >= 2 && express.flightHours <= 4, `EZE→GRU nonstop is about 3 h, got ${express.flightHours}`);
+  // A late pickup moves the departures to the next day, and the plan searches again
+  const before = calls(agent, "searchAvailableFlights").length;
+  await agent.setField("pickupTime", "20:00", "edit");
+  assert.equal(calls(agent, "searchAvailableFlights").length, before + 1);
+  for (const o of agent.state.options) assert.ok(Date.parse(o.flight.departs) >= Date.parse("2026-11-11T23:00:00Z"));
+});
+
+test("a longer route takes longer", async () => {
+  const { api } = setup();
+  const near = api.search("EZE", "GRU", "2026-11-11", 100).find((f) => f.service === "Express")!;
+  const far = api.search("EZE", "MIA", "2026-11-11", 100).find((f) => f.service === "Express")!;
+  assert.ok(far.flightHours > near.flightHours * 2);
+});
+
+test("every option that isn't recommended says why", async () => {
+  for (const goal of [SALMON, `${SALMON}, fastest`, `${SALMON}, cheapest`, `${SALMON}, fastest, budget of USD 1,000`]) {
+    const { agent } = setup();
+    await agent.submitGoal(goal);
+    await details(agent);
+    for (const o of agent.state.options) {
+      if (o.recommended) assert.equal(o.whyNot, undefined);
+      else assert.match(o.whyNot ?? "", /^Not recommended: /, `${goal}: ${o.flight.flightNo}`);
+    }
+  }
+});
+
+test("the plan's counters match the flow: questions count only where they are asked", async () => {
+  const { agent } = setup();
+  await agent.submitGoal(SALMON);
+  // Waiting for the proposal details: search, rates and compare are done; validate isn't waiting
+  const plan = agent.plan();
+  const by = (id: string) => plan.find((t) => t.id === id)!.status;
+  assert.equal(by("validate"), "done");
+  assert.equal(by("draft"), "needs_user");
+  assert.equal(plan.filter((t) => t.status === "needs_user").length, 1);
+  assert.equal(plan.filter((t) => t.status === "done").length, 6);
+});
+
+test("the interpreter: full description, ordinal dates, no handling invented from a date, currencies it can't use are surfaced", async () => {
+  const { agent } = setup();
+  await agent.submitGoal("Ship 2 boxes of fresh salmon, 8 kg each, 30x30x30 cm, from GRU to EZE, pickup on Nov 18th, by 2026-11-20, budget of EUR 800");
+  const s = agent.state.shipment;
+  assert.equal(s.description?.value, "Fresh salmon");
+  assert.equal(s.pickupDate?.value, "2026-11-18");
+  assert.equal(s.handling, undefined, "nothing in the message asks for a temperature");
+  assert.equal(agent.state.constraints.budgetUsd, undefined);
+  assert.match(agent.state.warnings?.[0] ?? "", /EUR.*only USD/);
 });

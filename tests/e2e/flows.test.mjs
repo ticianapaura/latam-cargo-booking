@@ -380,7 +380,7 @@ describe("agent path", () => {
 
   test("a late arrival must be accepted before Approve unlocks", async () => {
     const { page } = await openAgent();
-    await start(page, `${SALMON}, cheapest, deliver before Friday`);
+    await start(page, `${SALMON}, cheapest, deliver before Thursday`);
     await page.waitForSelector(".a-option");
     await details(page);
     const approve = page.locator("button:has-text('Approve and book')");
@@ -464,7 +464,7 @@ describe("agent path", () => {
     await page.click("button:has-text('Approve and book')");
     await page.waitForSelector("text=It isn't known yet whether this booked");
     assert.equal(await status(page), "Booking status unknown");
-    assert.match(await page.innerText(".a-task.failed"), /Status unknown/);
+    assert.match(await page.innerText(".a-task.unknown"), /Status unknown/);
     assert.equal(await page.locator(".a-panel button:has-text('Cancel plan')").count(), 0);
     assert.equal(await page.locator(".a-panel button:has-text('Continue in the form')").count(), 0);
     await page.click("button:has-text('Check the status again')");
@@ -524,6 +524,49 @@ describe("agent path", () => {
     const zoom = await page.evaluate(() => Number(getComputedStyle(document.querySelector(".screen")).zoom));
     assert.ok(zoom >= 0.68, `screen scale ${zoom}`);
     assert.deepEqual(errors, []);
+    await page.close();
+  });
+});
+
+describe("agent path · checklist", () => {
+  test("the panel and the plan count the same steps at every stop", async () => {
+    const { page } = await openAgent();
+    const counts = async () => [
+      (await page.innerText(".a-plan .a-count")).match(/(\d+) of 9/)[1],
+      (await page.innerText(".a-progress span")).match(/(\d+) of 9/)[1],
+    ];
+    await page.click("button.p-chip:has-text('Salmon to São Paulo')");
+    await page.click("button:has-text('Start planning')");
+    await page.waitForSelector("text=Which airport?");
+    let [a, b] = await counts();
+    assert.equal(a, b);
+    await page.click("[role=radio]:has-text('EZE')");
+    await page.click("form[aria-label='A few answers before searching flights'] button[type=submit]");
+    await page.waitForSelector("text=A few details for the proposal");
+    [a, b] = await counts();
+    assert.equal(a, b);
+    assert.equal(a, "6");
+    await details(page);
+    [a, b] = await counts();
+    assert.equal(a, b);
+    await page.close();
+  });
+
+  test("options that aren't recommended say why, and flights leave after pickup", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option.rec");
+    const others = page.locator(".a-option:not(.rec) .a-option-foot");
+    assert.equal(await others.count(), 2);
+    for (const t of await others.allInnerTexts()) assert.match(t, /Not recommended: /);
+    assert.match(await page.innerText(".a-option.rec"), /Delivered around/);
+    await page.close();
+  });
+
+  test("a budget in another currency is shown to the user, not only logged", async () => {
+    const { page } = await openAgent();
+    await start(page, `${SALMON}, budget of EUR 800`);
+    await page.waitForSelector("text=only USD budgets are supported");
     await page.close();
   });
 });

@@ -10,7 +10,7 @@ import type { Booking } from "../proto/data.ts";
 import { ruleBasedInterpreter } from "./interpret.ts";
 import type { Interpreter } from "./interpret.ts";
 import type { BookingLedger } from "./ledger.ts";
-import { ApiError } from "./mockApi.ts";
+import { ApiError, DELIVERY_HOURS } from "./mockApi.ts";
 import type { MockCarrierApi } from "./mockApi.ts";
 import { TOOL_LEVEL, authorize, commercialExceptions, currentApproval, hardRestrictions, missingDocuments, termsHash } from "./policy.ts";
 import { LABELS, NEEDED_TO_PROPOSE, NEEDED_TO_SEARCH, airportsIn, chargeableKg, handoffBooking, missing, toBooking } from "./shipment.ts";
@@ -22,7 +22,16 @@ import type {
 import type { Clock } from "./util.ts";
 import { hash, iso, money, sleep, stable, when } from "./util.ts";
 
-export const STORE_KEY = "cargopilot.agent.v1";
+export const STORE_KEY = "cargopilot.agent.v2"; // v2: flights carry delivery estimates
+const HOUR_MS = 3_600_000;
+
+/** Which task a question belongs to, so it's asked where it applies */
+export function questionTask(q: Question): TaskId {
+  if (q.id === "Q-nodate") return "search";
+  if (q.id === "Q-none-left") return "compare";
+  if (q.field === "docs" || NEEDED_TO_PROPOSE.includes(q.field as ShipmentKey)) return "draft";
+  return "validate";
+}
 const MAX_ATTEMPTS = 3; // a read-only tool is tried up to 3 times before the task is marked Failed
 
 export type Deps = { api: MockCarrierApi; ledger: BookingLedger; store: GuardedStore; clock: Clock; interpreter?: Interpreter; delayMs?: number };
@@ -85,6 +94,7 @@ export class Agent {
     st.shipment = r.shipment;
     st.constraints = r.constraints;
     st.ambiguous = r.ambiguous.map((a) => ({ field: a.field, codes: a.codes }));
+    st.warnings = r.warnings;
     for (const n of r.notes) this.log("agent", "decision", n);
     this.log("agent", "decision", `Interpreted ${Object.keys(r.shipment).length} shipment fields and ${Object.keys(r.constraints).length} constraints with fixed rules (mock mode, no language model).`);
     return this.run();
@@ -134,17 +144,20 @@ export class Agent {
   }
 
   /** The user approves the exact current proposal, including any late arrival it carries */
-  async approve(role: Role = "coordinator") {
+  /** The user approves the exact current proposal. A late arrival must be accepted explicitly, by its id. */
+  async approve(role: Role = "coordinator", accepted: string[] = []) {
     const st = this.state;
     const p = st.proposal;
     if (role !== "coordinator") return this.deny("approve", "Only the user who books (coordinator) approves the booking itself.");
     if (st.status !== "awaiting_approval" || !p) return this.deny("approve", "There's nothing waiting for approval.");
+    const unaccepted = p.option.exceptions.filter((e) => e.approver === "coordinator" && !accepted.includes(e.id));
+    if (unaccepted.length) return this.deny("approve", `Not approved: ${unaccepted.map((e) => e.text).join(" ")} It has to be accepted explicitly first.`);
     const add = (kind: Approval["kind"], exceptionId?: string) => {
       const a: Approval = { id: `AP-${hash(`${p.id}${p.version}${kind}${exceptionId ?? ""}${st.seq}`)}`, kind, exceptionId, by: "coordinator", proposalId: p.id, version: p.version, termsHash: p.termsHash, at: this.now() };
       st.approvals.push(a);
       this.log("user", "approval", kind === "booking" ? `Approved proposal v${p.version} for ${money(p.option.quote.total)}.` : `Accepted: ${p.option.exceptions.find((e) => e.id === exceptionId)!.text}`, { proposalId: p.id, version: p.version, approvalId: a.id });
     };
-    for (const ex of p.option.exceptions.filter((e) => e.approver === "coordinator")) add("exception", ex.id);
+    for (const ex of p.option.exceptions.filter((e) => e.approver === "coordinator" && accepted.includes(e.id))) add("exception", ex.id);
     add("booking");
     return this.run();
   }
@@ -240,34 +253,33 @@ export class Agent {
 
   /* ---------------- the plan ---------------- */
 
-  /** The plan as the user sees it, derived from state every time */
+  /** The plan as the user sees it, derived from state every time. The page and every counter use this one list. */
   plan(): Task[] {
     const st = this.state;
     const m = st.memo;
     const k = this.keys();
     const t = (id: TaskId, label: string, level: Task["level"], status: Task["status"], detail?: string): Task => ({ id, label, level, status, detail });
     const done = (key: keyof Memo) => m[key] !== undefined && m[key] === k[key];
-    const waitingUser = st.status === "needs_user";
+    // Questions show on the task that asked them, and only there
+    const asks = (id: TaskId) => st.status === "needs_user" && st.questions.some((q) => questionTask(q) === id);
+    const stopped = st.status === "blocked" || st.status === "handoff";
     const tasks: Task[] = [
       t("interpret", "Read your goal", "L3", st.goalText ? "done" : "pending"),
-      t("restrictions", "Check cargo restrictions", "L3", st.status === "blocked" ? "blocked" : st.status === "handoff" ? "blocked" : done("restrictions") ? "done" : "pending"),
-      t("validate", "Check the details needed to search", "L3", st.status === "blocked" || st.status === "handoff" ? "pending" : done("validate") ? (st.questions.length ? "needs_user" : "done") : "pending", st.questions.length ? `${st.questions.length} question(s)` : undefined),
-      t("search", "Search available flights", "L3", done("search") ? (st.flights.length ? "done" : "needs_user") : "pending", done("search") ? `${st.flights.length} found` : undefined),
-      t("rates", "Retrieve freight rates", "L3", done("rates") ? "done" : "pending"),
-      t("compare", "Compare options and recommend one", "L1", done("compare") ? "done" : "pending"),
-      t("draft", "Prepare a booking proposal (not binding)", "L3", st.proposal && done("draft") ? "done" : "pending", st.proposal ? `v${st.proposal.version}` : undefined),
+      t("restrictions", "Check cargo restrictions", "L3", stopped ? "blocked" : done("restrictions") ? "done" : "pending"),
+      t("validate", "Check the details needed to search", "L3", stopped ? "pending" : asks("validate") ? "needs_user" : done("validate") ? "done" : "pending"),
+      t("search", "Search available flights", "L3", asks("search") ? "needs_user" : done("search") && st.flights.length ? "done" : "pending", done("search") ? `${st.flights.length} found` : undefined),
+      t("rates", "Retrieve freight rates", "L3", done("rates") && st.quotes.length ? "done" : "pending"),
+      t("compare", "Compare options and recommend one", "L1", asks("compare") ? "needs_user" : done("compare") && st.options.length ? "done" : "pending"),
+      t("draft", "Prepare a booking proposal (not binding)", "L3", asks("draft") ? "needs_user" : st.proposal && done("draft") ? "done" : "pending", st.proposal ? `v${st.proposal.version}` : undefined),
       t("approval", "Your approval, and the Manager's for exceptions", "L2", st.booking ? "done" : st.status === "needs_manager" ? "needs_manager" : st.status === "awaiting_approval" ? "needs_user" : currentApproval(st, "booking") ? "done" : "pending"),
-      t("confirm", "Confirm the booking", "L2", st.booking ? "done" : st.status === "booking" || st.status === "status_unknown" ? "running" : st.status === "failed" && st.failedTool === "confirmBooking" ? "failed" : "pending"),
+      t("confirm", "Confirm the booking", "L2", st.booking ? "done" : st.status === "status_unknown" ? "unknown" : st.status === "booking" ? "running" : st.status === "failed" && st.failedTool === "confirmBooking" ? "failed" : "pending"),
     ];
     for (const task of tasks) if (st.status === "failed" && st.failedTool && toolTask(st.failedTool) === task.id) task.status = "failed";
     if (st.status === "running" && st.currentTool) {
       const id = toolTask(st.currentTool);
-      tasks.find((x) => x.id === id)!.status = "running";
+      if (id !== "confirm" || !st.booking) tasks.find((x) => x.id === id)!.status = "running";
     }
-    if (waitingUser && st.questions.some((q) => NEEDED_TO_PROPOSE.includes(q.field as ShipmentKey) || q.field === "docs")) {
-      const d = tasks.find((x) => x.id === "draft")!;
-      d.status = "needs_user";
-    }
+    if (st.status === "cancelled") for (const task of tasks) if (task.status !== "done") task.status = "skipped";
     return tasks;
   }
 
@@ -276,7 +288,7 @@ export class Agent {
     const s = st.shipment;
     const val = (f?: Field<unknown>) => f?.value;
     const shipKey = hash(stable(Object.fromEntries(Object.entries(s).map(([key, f]) => [key, (f as Field<unknown>).value]))));
-    const searchKey = hash(stable([val(s.originAirport), val(s.destAirport), val(s.pickupDate), chargeableKg(s)]));
+    const searchKey = hash(stable([val(s.originAirport), val(s.destAirport), val(s.pickupDate), val(s.pickupTime), chargeableKg(s)]));
     const ratesKey = hash(stable([searchKey, st.flights.map((f) => f.id), val(s.cargoType), chargeableKg(s)]));
     const compareKey = hash(stable([ratesKey, st.quotes.map((q) => q.id + q.total), stable(st.constraints), st.rejectedFlightIds]));
     const draftKey = hash(stable([shipKey, compareKey, st.selectedFlightId, st.forceNewVersion]));
@@ -366,8 +378,10 @@ export class Agent {
 
     // 4 · Search
     if (m.search !== k.search) {
-      const r = await this.tool("searchAvailableFlights", { origin: s.originAirport!.value, dest: s.destAirport!.value, fromDate: s.pickupDate!.value, chargeableKg: chargeableKg(s) }, (i) => ({
-        flights: this.deps.api.search(i.origin, i.dest, i.fromDate, i.chargeableKg),
+      // From the pickup time when it's known; until then, from the first pickup slot of the day (6 AM)
+      const ready = `${s.pickupDate!.value}T${s.pickupTime?.value ?? "06:00"}:00Z`;
+      const r = await this.tool("searchAvailableFlights", { origin: s.originAirport!.value, dest: s.destAirport!.value, fromDate: s.pickupDate!.value, readyAt: ready, chargeableKg: chargeableKg(s) }, (i) => ({
+        flights: this.deps.api.search(i.origin, i.dest, i.fromDate, i.chargeableKg, i.readyAt),
       }));
       if (!r) return false;
       st.flights = r.flights;
@@ -627,34 +641,55 @@ export class Agent {
       })
       .filter((r) => r.quote);
     if (!rows.length) return [];
-    const minT = Math.min(...rows.map((r) => r.flight.transitHours));
+    const deliv = (r: (typeof rows)[0]) => Date.parse(r.flight.deliveredBy);
+    const minD = Math.min(...rows.map(deliv));
     const minP = Math.min(...rows.map((r) => r.quote.total));
-    const score = (r: (typeof rows)[0]) =>
-      prio === "fastest" ? r.flight.arrives : prio === "cheapest" ? String(r.quote.total).padStart(12, "0") : String(Math.round((r.flight.transitHours / minT + r.quote.total / minP) * 1000)).padStart(8, "0");
+    const ready = Date.parse(`${st.shipment.pickupDate!.value}T${st.shipment.pickupTime?.value ?? "06:00"}:00Z`);
+    // Balanced: hours from pickup to delivery and price, each against the best, weighted equally
+    const balanced = (r: (typeof rows)[0]) => (deliv(r) - ready) / (minD - ready) + r.quote.total / minP;
+    const score = (r: (typeof rows)[0]) => (prio === "fastest" ? deliv(r) : prio === "cheapest" ? r.quote.total : balanced(r));
     // Options that meet every constraint come first; within each group, the user's priority decides
-    const sorted = [...rows].sort((a, b) => a.exceptions.length - b.exceptions.length || (score(a) < score(b) ? -1 : 1));
+    const sorted = [...rows].sort((a, b) => a.exceptions.length - b.exceptions.length || score(a) - score(b));
     const best = sorted[0];
     const fmt = when;
+    const hours = (ms: number) => Math.round(Math.abs(ms) / HOUR_MS);
     return sorted.map((r, i) => {
       const reasons: string[] = [];
-      if (prio === "fastest" && r.flight.transitHours === minT) reasons.push("Fastest of the options, as you asked.");
+      if (prio === "fastest" && deliv(r) === minD) reasons.push("Delivered first of the options, as you asked.");
       if (prio === "cheapest" && r.quote.total === minP) reasons.push("Cheapest of the options, as you asked.");
-      if (deadline) reasons.push(r.flight.arrives <= deadline ? `Arrives ${fmt(r.flight.arrives)}, before the deadline.` : `Arrives ${fmt(r.flight.arrives)}, after the deadline.`);
+      if (prio === "balanced" && r === best && !r.exceptions.length) reasons.push("Best balance of price and delivery time among the options that meet your limits.");
+      if (deadline) reasons.push(r.flight.deliveredBy <= deadline ? `Delivered around ${fmt(r.flight.deliveredBy)}, before the deadline.` : `Delivered around ${fmt(r.flight.deliveredBy)}, after the deadline.`);
       if (budget !== undefined) reasons.push(r.quote.total <= budget ? `${money(r.quote.total)}, within the ${money(budget)} budget.` : `${money(r.quote.total)}, over the ${money(budget)} budget.`);
-      if (!reasons.length) reasons.push(`${r.flight.service} service, ${r.flight.transitHours} h door to door, ${money(r.quote.total)}.`);
+      if (!reasons.length) reasons.push(`${r.flight.service} service: delivered around ${fmt(r.flight.deliveredBy)}, ${money(r.quote.total)}.`);
+      const vs = (o: (typeof rows)[0]) => {
+        const dp = o.quote.total - r.quote.total;
+        const dt = deliv(o) - deliv(r);
+        return `${dp < 0 ? `${money(-dp)} cheaper` : dp > 0 ? `${money(dp)} more` : "same price"}, ${dt < 0 ? `delivered ${hours(dt)} h earlier` : dt > 0 ? `delivered ${hours(dt)} h later` : "delivered at the same time"}`;
+      };
       const tradeoffs = sorted
         .filter((o) => o !== r)
-        .map((o) => {
-          const dp = o.quote.total - r.quote.total;
-          const dt = o.flight.transitHours - r.flight.transitHours;
-          return `${o.flight.flightNo} (${o.flight.service}): ${dp < 0 ? `${money((-dp))} cheaper` : `${money(dp)} more`}, ${dt < 0 ? `${-dt} h faster` : `${dt} h slower`}${o.exceptions.length ? `, ${o.exceptions.map((e) => e.kind === "budget" ? "over budget" : "late").join(" and ")}` : ""}.`;
-        });
+        .map((o) => `${o.flight.flightNo} (${o.flight.service}): ${vs(o)}${o.exceptions.length ? `, ${o.exceptions.map((e) => (e.kind === "budget" ? "over budget" : "late")).join(" and ")}` : ""}.`);
+      // For every option that isn't recommended, the reason in one sentence
+      let whyNot: string | undefined;
+      if (r !== best) {
+        if (r.exceptions.length > best.exceptions.length)
+          whyNot = `Not recommended: ${r.exceptions.map((e) => (e.kind === "budget" ? "it's over your budget" : "it's delivered after your deadline")).join(" and ")}, and ${best.flight.flightNo} ${best.exceptions.length ? "has fewer exceptions" : "meets your limits"}.`;
+        else if (prio === "fastest") whyNot = `Not recommended: ${best.flight.flightNo} is delivered ${hours(deliv(r) - deliv(best))} h earlier, and you asked for the fastest.`;
+        else if (prio === "cheapest") whyNot = `Not recommended: ${best.flight.flightNo} costs ${money(r.quote.total - best.quote.total)} less, and you asked for the cheapest.`;
+        else {
+          const cheaper = r.quote.total < best.quote.total;
+          whyNot = cheaper
+            ? `Not recommended: it saves ${money(best.quote.total - r.quote.total)} but is delivered ${hours(deliv(r) - deliv(best))} h later than ${best.flight.flightNo}.`
+            : `Not recommended: it costs ${money(r.quote.total - best.quote.total)} more than ${best.flight.flightNo} to be delivered ${hours(deliv(best) - deliv(r))} h earlier.`;
+        }
+      }
       return {
         flight: r.flight,
         quote: r.quote,
         rank: i + 1,
         recommended: r === best,
         reasons,
+        whyNot,
         tradeoffs,
         exceptions: r.exceptions,
         verified: [
@@ -662,7 +697,7 @@ export class Agent {
           `Price breakdown, valid until ${fmt(r.quote.validUntil)} (retrieveFreightRates)`,
           "Cargo restrictions (checkCargoRestrictions)",
         ],
-        estimated: ["Door-to-door time includes road legs and is an estimate", "Exact delivery time at the address"],
+        estimated: [`Delivery time: landing plus about ${DELIVERY_HOURS} h by road`, "Pickup to departure: about 3 h for the road leg, acceptance and security"],
       };
     });
   }

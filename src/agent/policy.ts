@@ -95,8 +95,8 @@ export function commercialExceptions(o: Pick<Option, "flight" | "quote">, budget
       approver: "manager",
       text: `${money(o.quote.total)} is ${money((o.quote.total - budgetUsd))} over the ${money(budgetUsd)} budget.`,
     });
-  if (deadline && o.flight.arrives > deadline)
-    out.push({ id: `EX-deadline-${o.flight.id}`, kind: "deadline", approver: "coordinator", text: `Arrives ${when(o.flight.arrives)}, after the deadline.` });
+  if (deadline && o.flight.deliveredBy > deadline)
+    out.push({ id: `EX-deadline-${o.flight.id}`, kind: "deadline", approver: "coordinator", text: `Delivered around ${when(o.flight.deliveredBy)}, after the deadline.` });
   return out;
 }
 

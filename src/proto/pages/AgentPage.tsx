@@ -6,9 +6,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode, Ref } from "react";
+import { questionTask as questionHome } from "../../agent/agent.ts";
 import type { Agent } from "../../agent/agent.ts";
 import { currentApproval, missingDocuments } from "../../agent/policy.ts";
-import { NEEDED_TO_PROPOSE } from "../../agent/shipment.ts";
 import type { AgentState, AgentStatus, LogEntry, Option, Question, Restriction, Task, TaskId } from "../../agent/types.ts";
 import { MOCK_LABEL } from "../../agent/types.ts";
 import { agentSession, EXAMPLES, SIMULATIONS, useAgentSession } from "../agentSession";
@@ -75,14 +75,6 @@ const TASK_TOOL: Partial<Record<TaskId, LogEntry["tool"]>> = {
   draft: "prepareBookingDraft",
   confirm: "confirmBooking",
 };
-
-/** Which task a question belongs under, so it appears next to what asked it */
-function questionHome(q: Question): TaskId {
-  if (q.id === "Q-nodate") return "search";
-  if (q.id === "Q-none-left") return "compare";
-  if (q.field === "docs" || NEEDED_TO_PROPOSE.includes(q.field as never)) return "draft";
-  return "validate";
-}
 
 const BLANK: Booking = {
   ...FILLED,
@@ -344,19 +336,9 @@ function Plan({ agent, manager, onForm, onManagerView }: { agent: Agent; manager
   const [open, setOpen] = useState<Set<TaskId>>(new Set());
   const qs = st.status === "needs_user" ? st.questions : [];
   const home = (id: TaskId) => qs.filter((q) => questionHome(q) === id);
-  // A task shows "needs you" only where its questions are, even if the planner flags more than one
-  const view = (t: Task): Task["status"] => {
-    if (t.status === "needs_user" && t.id !== "approval" && !home(t.id).length) return "done";
-    if (t.id === "approval" && st.status === "needs_user") return "pending";
-    if (t.id === "draft" && home("draft").length) return "needs_user";
-    if (t.id === "search" && home("search").length) return "needs_user";
-    if (t.id === "compare" && home("compare").length) return "needs_user";
-    if (t.id === "restrictions" && st.status === "handoff") return "needs_user";
-    if (st.status === "cancelled" && t.status !== "done") return "skipped";
-    if (t.id === "confirm" && st.status === "status_unknown") return "failed";
-    return t.status;
-  };
-  const focus = tasks.find((t) => ["running", "needs_user", "needs_manager", "blocked", "failed"].includes(view(t)))?.id ?? (st.booking ? "confirm" : undefined);
+  // The agent's own plan, as is: the panel and this list count the same steps
+  const view = (t: Task): Task["status"] => (t.id === "restrictions" && st.status === "handoff" ? "needs_user" : t.status);
+  const focus = tasks.find((t) => ["running", "needs_user", "needs_manager", "blocked", "failed", "unknown"].includes(view(t)))?.id ?? (st.booking ? "confirm" : undefined);
   const firstPending = tasks.find((t) => view(t) === "pending")?.id;
   const done = tasks.filter((t) => view(t) === "done").length;
 
@@ -428,6 +410,7 @@ function taskIcon(status: Task["status"]) {
     case "done": return <Icon d={I.check} size={14} stroke={2.8} />;
     case "running": return <Spinner size={15} />;
     case "failed": return <Icon d={I.x} size={14} stroke={2.6} />;
+    case "unknown": return <span className="a-bang">?</span>;
     case "blocked": return <Icon d={I.x} size={14} stroke={2.6} />;
     case "needs_user":
     case "needs_manager": return <span className="a-bang">!</span>;
@@ -441,7 +424,8 @@ function stateText(status: Task["status"], t: Task, st: AgentState) {
     case "needs_user": return t.id === "restrictions" ? "Needs a specialist" : "Needs you";
     case "needs_manager": return "Needs the Manager";
     case "blocked": return "Blocked";
-    case "failed": return t.id === "confirm" && st.status === "status_unknown" ? "Status unknown" : "Failed";
+    case "failed": return "Failed";
+    case "unknown": return "Status unknown";
     case "skipped": return "Not done";
     case "done": return t.id === "approval" && st.booking ? "Approved" : "";
     default: return "";
@@ -452,8 +436,8 @@ function stateText(status: Task["status"], t: Task, st: AgentState) {
 function TaskResult({ t, st, status }: { t: Task; st: AgentState; status: Task["status"] }) {
   let text = "";
   if (t.id === "interpret") {
-    const n = Object.keys(st.shipment).filter((k) => (st.shipment as Record<string, { source: string }>)[k].source !== "user").length + Object.keys(st.constraints).filter((k) => (st.constraints as Record<string, { source: string }>)[k].source !== "user").length;
-    text = `Read ${n} details from your message with fixed rules.`;
+    const n = GROUPS.flatMap((g) => g.keys).filter((k) => ["read", "default"].includes(source(st, k).tone) && show(st, k) && !(k === "priority" && !st.constraints.priority)).length;
+    text = `Read ${n} of the ${GROUPS.flatMap((g) => g.keys).length} details from your message, with fixed rules.`;
   } else if (t.id === "approval") {
     const ap = currentApproval(st, "booking");
     if (ap) text = `Approved by you at ${fmtClock(ap.at)} · proposal v${ap.version}.`;
@@ -500,6 +484,8 @@ function taskBody(id: TaskId, c: Ctx): ReactNode {
   const st = c.agent.state;
   const failedHere = st.status === "failed" && st.failedTool && TASK_TOOL[id] === st.failedTool;
   switch (id) {
+    case "interpret":
+      return st.warnings?.length ? <div className="a-block you" role="note">{st.warnings.map((w) => <p key={w} style={{ margin: 0 }}><Icon d={I.warn} size={16} /> {w}</p>)}</div> : null;
     case "validate":
       return c.questions.length ? <Questions c={c} title="A few answers before searching flights" why="CargoPilot needs these to search. It doesn't fill gaps with guesses." /> : null;
     case "restrictions":
@@ -750,8 +736,8 @@ function OptionCard({ o, st, selected, open, onToggle, onChoose }: { o: Option; 
         </div>
         <div className="a-option-times">
           <div><span className="a-muted">Departs</span>{fmtDT(f.departs)}</div>
-          <div><span className="a-muted">Arrives</span>{fmtDT(f.arrives)}</div>
-          <div><span className="a-muted">Door to door</span>about {f.transitHours} h <small>(estimate)</small></div>
+          <div><span className="a-muted">Lands</span>{fmtDT(f.arrives)} <small>{f.flightHours} h flight</small></div>
+          <div><span className="a-muted">Delivered around</span>{fmtDT(f.deliveredBy)} <small>(estimate)</small></div>
         </div>
         <div className="a-option-price">
           <b>{usd(o.quote.total)}</b>
@@ -761,7 +747,8 @@ function OptionCard({ o, st, selected, open, onToggle, onChoose }: { o: Option; 
       {open ? (
         <div className="a-option-body">
           <div className="a-why">
-            <h4>{o.recommended ? "Why it's recommended" : "About this option"}</h4>
+            <h4>{o.recommended ? "Why it's recommended" : "Why it isn't recommended"}</h4>
+            {o.whyNot && <p className="a-whynot">{o.whyNot}</p>}
             <ul>{o.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
             {o.exceptions.length > 0 && (
               <ul className="a-exc">
@@ -800,7 +787,7 @@ function OptionCard({ o, st, selected, open, onToggle, onChoose }: { o: Option; 
         </div>
       ) : (
         <div className="a-option-foot">
-          <span className="a-muted">{o.reasons[0]}</span>
+          <span className="a-muted">{o.whyNot ?? o.reasons[0]}</span>
           <button type="button" className="a-change" onClick={onToggle}>{o.recommended || selected ? "Why this one?" : "Why not this one?"}</button>
           {onChoose && !selected && <button type="button" className="p-btn secondary sm" onClick={onChoose}>Use this option instead</button>}
         </div>
@@ -819,7 +806,8 @@ function ProposalFacts({ st }: { st: AgentState }) {
     <dl className="p-kv a-kv">
       <div><dt>Flight</dt><dd>{f.flightNo} · {f.service} · {f.stops ? `${f.stops} stop` : "nonstop"}</dd></div>
       <div><dt>Departs</dt><dd>{fmtDT(f.departs)} · {f.origin}</dd></div>
-      <div><dt>Arrives</dt><dd>{fmtDT(f.arrives)} · {f.dest}</dd></div>
+      <div><dt>Lands</dt><dd>{fmtDT(f.arrives)} · {f.dest}</dd></div>
+      <div><dt>Delivered around</dt><dd>{fmtDT(f.deliveredBy)} (estimate)</dd></div>
       <div><dt>Cargo</dt><dd>{s.pieces?.value} × {s.weightPerPiece?.value} {s.weightUnit?.value ?? "kg"} · {s.cargoType?.value}</dd></div>
       <div><dt>Pickup</dt><dd>{fmtDate(s.pickupDate?.value ?? "")} · {fmtTime(s.pickupTime?.value ?? "")}</dd></div>
       <div><dt>Chargeable weight</dt><dd>{p.option.quote.chargeableKg} kg</dd></div>
@@ -887,7 +875,7 @@ function Approval({ c }: { c: Ctx }) {
       ) : (
         <div className="a-row-between">
           <button type="button" className="p-btn secondary md" onClick={() => setRejecting(true)}>Reject</button>
-          <button type="button" className="p-btn" disabled={!ready} onClick={() => void c.agent.approve("coordinator")}>
+          <button type="button" className="p-btn" disabled={!ready} onClick={() => void c.agent.approve("coordinator", [...accepted])}>
             Approve and book · {usd(p.option.quote.total)}
           </button>
         </div>
@@ -939,7 +927,7 @@ function ManagerDecision({ c }: { c: Ctx }) {
       <p>{ex.text} The coordinator chose it{st.constraints.priority?.value === "fastest" ? " because they asked for the fastest option" : ""}.</p>
       <ProposalFacts st={st} />
       {within.length > 0 && (
-        <p className="p-help">Within budget instead: {within.map((o) => `${o.flight.flightNo} ${o.flight.service} at ${usd(o.quote.total)}, arrives ${fmtDT(o.flight.arrives)}`).join("; ")}.</p>
+        <p className="p-help">Within budget instead: {within.map((o) => `${o.flight.flightNo} ${o.flight.service} at ${usd(o.quote.total)}, delivered around ${fmtDT(o.flight.deliveredBy)}`).join("; ")}.</p>
       )}
       <div className="a-row-between">
         <button type="button" className="p-btn secondary md" onClick={() => void c.agent.decideException(ex.id, "manager", false)}>Reject exception</button>

@@ -437,6 +437,9 @@
 .a-why ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: 14px; color: var(--p-muted); }
 .a-why ul.a-exc { margin-top: 8px; padding: 10px 12px 10px 28px; border-radius: 8px; background: var(--a-amber-bg); color: var(--a-amber-ink); }
 .a-why ul.a-exc b { font-weight: 600; }
+.a-whynot { margin: 0 0 6px; font-size: 14px; font-weight: 500; color: var(--p-ink); }
+.a-task.unknown .a-task-icon { border-color: var(--p-error-line); background: var(--p-error-line); color: #fff; }
+.a-task.unknown .a-task-state { color: var(--p-error); }
 .a-ok-line { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 13.5px; color: var(--p-ok); }
 .a-breakdown { width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .a-breakdown table, .a-lines { width: 100%; border-collapse: collapse; font-size: 14px; }

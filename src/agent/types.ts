@@ -61,9 +61,15 @@ export type Flight = {
   flightNo: string;
   origin: string;
   dest: string;
-  departs: string; // ISO, local time of origin
-  arrives: string; // ISO, local time of destination
-  transitHours: number; // door to door, including road legs
+  departs: string; // ISO; the prototype has no time zones
+  /** Landing at the destination airport */
+  arrives: string;
+  /** Estimated delivery at the address: landing plus the road leg. What a deadline is checked against. */
+  deliveredBy: string;
+  /** Hours from departure to estimated delivery */
+  transitHours: number;
+  /** Hours in the air, including any connection */
+  flightHours: number;
   stops: number;
   service: "Express" | "Standard" | "Economy";
   capacityKg: number;
@@ -97,6 +103,8 @@ export type Option = {
   rank: number;
   recommended: boolean;
   reasons: string[];
+  /** For an option that isn't recommended: why, in one sentence */
+  whyNot?: string;
   tradeoffs: string[];
   exceptions: Exception[];
   /** Facts that came from a tool versus estimates the agent made */
@@ -149,7 +157,7 @@ export type BookingRecord = {
 };
 
 export type TaskId = "interpret" | "validate" | "restrictions" | "search" | "rates" | "compare" | "draft" | "approval" | "confirm";
-export type TaskStatus = "pending" | "running" | "done" | "failed" | "needs_user" | "needs_manager" | "blocked" | "skipped";
+export type TaskStatus = "pending" | "running" | "done" | "failed" | "needs_user" | "needs_manager" | "blocked" | "skipped" | "unknown";
 export type Task = { id: TaskId; label: string; level: "L3" | "L1" | "L2" | "L0"; status: TaskStatus; detail?: string };
 
 export type AgentStatus =
@@ -201,6 +209,8 @@ export type AgentState = {
   shipment: Shipment;
   constraints: Constraints;
   questions: Question[];
+  /** What the message said that couldn't be used, shown to the user (not only logged) */
+  warnings?: string[];
   restrictions: Restriction[];
   status: AgentStatus;
   /** Status before a pause, to resume where it was */

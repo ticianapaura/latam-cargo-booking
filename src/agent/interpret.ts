@@ -16,6 +16,8 @@ export type Interpretation = {
   ambiguous: { field: "originAirport" | "destAirport"; place: string; codes: string[] }[];
   /** Plain-language notes on what was read, shown in the activity log */
   notes: string[];
+  /** Things in the message that were seen but not used, which the user must know about (e.g. a budget in EUR) */
+  warnings: string[];
 };
 
 export interface Interpreter {
@@ -29,7 +31,7 @@ const CARGO_WORDS: [RegExp, string][] = [
   [/\b(dangerous goods|hazmat|lithium batter(y|ies)|batter(y|ies)|chemicals?|flammable)\b/, "Dangerous goods"],
   [/\b(live animals?|pets?|dogs?|cats?|horses?|livestock)\b/, "Live animals"],
   [/\b(vaccines?|medicines?|pharma(ceuticals?)?|drugs)\b/, "Pharmaceuticals"],
-  [/\b(salmon|fish|seafood|fruit|flowers|meat|perishables?|fresh)\b/, "Perishables"],
+  [/\b((?:fresh |frozen |chilled )?(?:salmon|fish|seafood|fruit|flowers|meat)|perishables?|fresh produce)\b/, "Perishables"],
   [/\b(jewel(le)?ry|gold|valuables|banknotes)\b/, "Valuables"],
   [/\b(merchandise|general cargo|goods|auto parts|spare parts|parts|textiles|clothing|machinery)\b/, "General cargo"],
 ];
@@ -56,7 +58,7 @@ function nextWeekday(name: string) {
 
 /** A date written as "Friday", "Nov 20", "20 November", "2026-11-20", "today" or "tomorrow" */
 function readDate(s: string): string | null {
-  s = s.trim();
+  s = s.trim().replace(/(\d)(st|nd|rd|th)\b/, "$1").replace(/ of /, " ");
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
   if (s === "today") return TODAY;
   if (s === "tomorrow") return new Date(Date.parse(`${TODAY}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
@@ -70,7 +72,7 @@ function readDate(s: string): string | null {
 }
 // Month words must be real months, so "ship 10 boxes" is never read as a date
 const MONTH = String.raw`(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*`;
-const DATE = String.raw`(\d{4}-\d{2}-\d{2}|today|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day|${MONTH}\.? \d{1,2}\b|\d{1,2} ${MONTH})`;
+const DATE = String.raw`(\d{4}-\d{2}-\d{2}|today|tomorrow|(?:mon|tues|wednes|thurs|fri|satur|sun)day|${MONTH}\.? \d{1,2}(?:st|nd|rd|th)?\b|\d{1,2}(?:st|nd|rd|th)? (?:of )?${MONTH})`;
 
 export const ruleBasedInterpreter: Interpreter = {
   interpret(text: string): Interpretation {
@@ -79,6 +81,7 @@ export const ruleBasedInterpreter: Interpreter = {
     const constraints: Constraints = {};
     const ambiguous: Interpretation["ambiguous"] = [];
     const notes: string[] = [];
+    const warnings: string[] = [];
 
     // Weight and pieces
     const w = t.match(/(\d[\d,]*(?:\.\d+)?)\s*(kg|kgs|kilos?|kilograms?|lb|lbs|pounds?)\b(\s*(each|per piece|per box|a piece))?/);
@@ -131,7 +134,7 @@ export const ruleBasedInterpreter: Interpreter = {
       const m = t.match(re);
       if (m) {
         shipment.cargoType = msg(type);
-        const phrase = t.match(new RegExp(String.raw`((?:fresh |frozen |chilled )?${m[0]}(?: in [a-z ]+? boxes)?)\b`));
+        const phrase = t.match(new RegExp(String.raw`(${m[0]}(?: in [a-z ]+? boxes)?)\b`));
         if (phrase && phrase[1].length >= 3) shipment.description = msg(phrase[1].charAt(0).toUpperCase() + phrase[1].slice(1));
         notes.push(`Read “${m[0]}” as ${type}.`);
         break;
@@ -141,7 +144,8 @@ export const ruleBasedInterpreter: Interpreter = {
     // Handling
     const handling: string[] = [];
     if (/\b(chilled|refrigerated|cold chain|keep cold|2-8)\b/.test(t)) handling.push("Chilled 2–8 °C");
-    if (/\b(frozen|-18)\b/.test(t)) handling.push("Frozen −18 °C");
+    // "-18" only as a temperature: never the day in a date like 2026-11-18
+    if (/\bfrozen\b|(?:^|[\s(])[-−]18 ?°?c?\b/.test(t)) handling.push("Frozen −18 °C");
     if (/\bfragile\b/.test(t)) handling.push("Fragile");
     if (handling.length) shipment.handling = msg(handling);
 
@@ -165,13 +169,16 @@ export const ruleBasedInterpreter: Interpreter = {
     if (b) {
       const cur = (b[1] ?? b[3] ?? "usd").replace("us$", "usd").replace("$", "usd").replace("dollars", "usd");
       if (/usd/.test(cur)) constraints.budgetUsd = msg(num(b[2]));
-      else notes.push(`Found a budget in ${cur.toUpperCase()}; only USD is supported, so it needs to be given in USD.`);
+      else {
+        notes.push(`Found a budget in ${cur.toUpperCase()}; only USD is supported, so it needs to be given in USD.`);
+        warnings.push(`Your budget is in ${cur.toUpperCase()}, and only USD budgets are supported, so no budget is applied. Add one in USD under What CargoPilot read.`);
+      }
     }
 
     // Priority
     if (/\b(fastest|quickest|asap|as soon as possible|urgent)\b/.test(t)) constraints.priority = msg("fastest");
     else if (/\b(cheapest|lowest price|lowest cost|cheap)\b/.test(t)) constraints.priority = msg("cheapest");
 
-    return { shipment, constraints, ambiguous, notes };
+    return { shipment, constraints, ambiguous, notes, warnings };
   },
 };
