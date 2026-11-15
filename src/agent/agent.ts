@@ -139,6 +139,7 @@ export class Agent {
     const st = this.state;
     if (!st.options.some((o) => o.flight.id === flightId)) return this.deny("selectOption", "That option isn't in the current list.");
     st.selectedFlightId = flightId;
+    st.selectedBy = "user";
     this.log("user", "decision", `Selected ${st.options.find((o) => o.flight.id === flightId)!.flight.flightNo}.`);
     return this.run();
   }
@@ -167,7 +168,7 @@ export class Agent {
     const p = st.proposal;
     if (!p || st.status !== "awaiting_approval") return this.deny("reject", "There's nothing waiting for approval.");
     st.rejectedFlightIds.push(p.option.flight.id);
-    st.selectedFlightId = undefined; // the proposal stays, so the next one is v+1 of it, with its changes listed
+    st.selectedFlightId = st.selectedBy = undefined; // the proposal stays, so the next one is v+1 of it, with its changes listed
     this.log("user", "rejection", `Rejected proposal v${p.version} (${p.option.flight.flightNo})${reason ? `: ${reason}` : ""}. Looking at the other options.`, { proposalId: p.id, version: p.version });
     return this.run();
   }
@@ -187,7 +188,7 @@ export class Agent {
       this.log("manager", "approval", `Approved exception: ${ex.text}`, { proposalId: p.id, version: p.version, approvalId: a.id });
     } else {
       st.rejectedFlightIds.push(p.option.flight.id);
-      st.selectedFlightId = undefined;
+      st.selectedFlightId = st.selectedBy = undefined;
       this.log("manager", "rejection", `Rejected exception: ${ex.text} Looking at the other options.`, { proposalId: p.id, version: p.version });
     }
     return this.run();
@@ -409,7 +410,10 @@ export class Agent {
     if (m.compare !== k.compare) {
       const r = await this.tool("compareShippingOptions", { priority: st.constraints.priority?.value ?? "balanced", budgetUsd: st.constraints.budgetUsd?.value, deadline: st.constraints.deadline?.value }, () => ({ options: this.compare() }));
       st.options = r.options;
-      if (!st.selectedFlightId || !st.options.some((o) => o.flight.id === st.selectedFlightId)) st.selectedFlightId = st.options.find((o) => o.recommended)?.flight.id;
+      if (!st.selectedFlightId || !st.options.some((o) => o.flight.id === st.selectedFlightId)) {
+        st.selectedFlightId = st.options.find((o) => o.recommended)?.flight.id;
+        st.selectedBy = "agent";
+      }
       m.compare = k.compare;
       return true;
     }

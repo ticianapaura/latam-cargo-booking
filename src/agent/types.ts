@@ -220,6 +220,8 @@ export type AgentState = {
   quotes: Quote[];
   options: Option[];
   selectedFlightId?: string;
+  /** Who chose it: "user" (Use this option instead) or "agent" (the recommendation, taken as the default) */
+  selectedBy?: "user" | "agent";
   proposal?: Proposal;
   approvals: Approval[];
   rejectedFlightIds: string[];

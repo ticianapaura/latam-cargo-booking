@@ -570,3 +570,33 @@ describe("agent path · checklist", () => {
     await page.close();
   });
 });
+
+describe("agent path · option cards", () => {
+  test("the violet stroke and Selected tag appear only once a card is chosen", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option.rec");
+    // Default state: options found, nothing chosen yet; the recommendation is only a tag
+    assert.equal(await page.locator(".a-option.sel").count(), 0);
+    assert.equal(await page.locator(".a-badge.sel").count(), 0);
+    assert.equal(await page.locator(".a-option.rec .a-badge.rec").count(), 1);
+    // The user chooses another card: it's selected at once
+    const other = page.locator(".a-option:not(.rec)").first();
+    const name = await other.locator(".a-option-id b").innerText();
+    await other.locator("button:has-text('Use this option instead')").click();
+    await page.waitForSelector(".a-option.sel");
+    assert.equal(await page.locator(".a-option.sel").count(), 1);
+    assert.equal(await page.locator(".a-option.sel .a-option-id b").innerText(), name);
+    await page.close();
+  });
+
+  test("when the agent puts the recommended option in the proposal, it becomes the selected card", async () => {
+    const { page } = await openAgent();
+    await start(page, SALMON);
+    await page.waitForSelector(".a-option.rec");
+    await details(page);
+    assert.equal(await page.locator(".a-option.sel.rec").count(), 1);
+    assert.match(await page.innerText(".a-option.sel .a-option-badges"), /Selected/);
+    await page.close();
+  });
+});

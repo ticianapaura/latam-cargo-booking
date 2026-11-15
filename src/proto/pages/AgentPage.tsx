@@ -688,6 +688,9 @@ function Options({ c }: { c: Ctx }) {
   const rec = st.options.find((o) => o.recommended);
   const [expanded, setExpanded] = useState<string | null>(null);
   const chosenOff = st.selectedFlightId && rec && st.selectedFlightId !== rec.flight.id;
+  // A card is shown as selected only once it has been chosen: by the user, or by the agent putting it in the proposal.
+  // Until then every card is in its default state, and the recommendation is only its tag.
+  const isSelected = (id: string) => st.selectedFlightId === id && (st.selectedBy === "user" || st.proposal?.option.flight.id === id);
   const canChoose = !c.manager && !locked(st) && st.status !== "paused";
   // While a proposal waits for approval, the options step back to one line each: the decision is below them
   const deciding = st.status === "awaiting_approval" || st.status === "needs_manager";
@@ -707,8 +710,8 @@ function Options({ c }: { c: Ctx }) {
           key={o.flight.id}
           o={o}
           st={st}
-          selected={st.selectedFlightId === o.flight.id}
-          open={expanded === o.flight.id || (!deciding && (o.recommended || st.selectedFlightId === o.flight.id))}
+          selected={isSelected(o.flight.id)}
+          open={expanded === o.flight.id || (!deciding && (o.recommended || isSelected(o.flight.id)))}
           onToggle={() => setExpanded(expanded === o.flight.id ? null : o.flight.id)}
           onChoose={canChoose ? () => void c.agent.selectOption(o.flight.id) : undefined}
         />
