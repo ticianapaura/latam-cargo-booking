@@ -725,8 +725,8 @@ function OptionCard({ o, st, selected, open, onToggle, onChoose }: { o: Option; 
       <div className="a-option-top">
         <div className="a-option-id">
           <div className="a-option-badges">
+            {selected && <span className="a-badge sel" title="This option is in the proposal you approve"><Icon d={I.check} size={12} stroke={3} /> Selected</span>}
             {o.recommended && <span className="a-badge rec"><Icon d={A.spark} size={12} fill="currentColor" /> Recommended</span>}
-            {selected && <span className="a-badge sel">In the proposal</span>}
             {o.exceptions.map((e) => (
               <span key={e.id} className="a-badge warn">{e.kind === "budget" ? "Over budget · Manager approval" : "Late · you'd accept it"}</span>
             ))}

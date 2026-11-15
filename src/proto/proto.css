@@ -419,8 +419,9 @@
 .a-option-id b { font-size: 15.5px; font-weight: 600; }
 .a-option-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .a-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.a-badge.rec { background: var(--p-indigo); color: #fff; }
-.a-badge.sel { background: var(--p-indigo-soft); color: #2c116f; }
+/* Selected (the user's choice, in the proposal) is the strong one, matching the card's stroke; Recommended is CargoPilot's suggestion */
+.a-badge.sel { background: var(--p-indigo); color: #fff; }
+.a-badge.rec { background: var(--p-indigo-soft); color: #2c116f; }
 .a-badge.warn { background: var(--a-amber-bg); color: var(--a-amber-ink); border: 1px solid var(--a-amber-line); }
 .a-badge.mute { background: var(--p-panel); color: var(--p-muted); }
 .a-option-times { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-size: 14px; }
