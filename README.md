@@ -6,7 +6,7 @@ Playable front end of a five-step **air cargo booking flow** for CargoPilot AI, 
 
 > **Concept project.** CargoPilot AI is a fictional brand. Flights (CP…), air waybills (000-…), prices and bookings are synthetic. The design case study it comes from was made for LATAM Cargo; this prototype is not affiliated with LATAM Airlines Group.
 >
-> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step and will run on fixed rules and synthetic data, with no language model.
+> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step: its core (planner, policy, tools, audit log) exists and is tested, but it isn't in the app yet. It runs on fixed rules and synthetic data, with no language model.
 
 ## Two different kinds of AI in this project
 
@@ -15,7 +15,7 @@ Keep these apart when reading the repo or the case study:
 | | What it is | Status |
 | --- | --- | --- |
 | **AI-assisted development** | I designed the screens and wrote this front end with an AI assistant (Claude): the design canvas, the generated screens, the React code and the tests. | Done. It's how the project was made, not a feature of the product. |
-| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
+| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. The core is built and tested (`src/agent/`); the screens come next. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
 
 ## Known issues
 
@@ -121,6 +121,43 @@ tools/
   convert.py        design canvas → React components
 ```
 
+## The agent core (mock mode)
+
+`src/agent/` is the agent behind the upcoming "Book with the agent" path. **It is deterministic: rule-based reading of the goal, a state-based planner and mock tools. No language model is called anywhere.** It isn't wired into the app's screens yet.
+
+- **State-based planning.** The planner looks at the current state and picks the next tool; it doesn't follow a script. Each tool's result is remembered against its inputs, so an answer, an edit or a new price re-runs that tool and everything after it, and nothing before it.
+- **Eight tools, two autonomy levels, enforced in code.** `validateShipment`, `checkCargoRestrictions`, `searchAvailableFlights`, `retrieveFreightRates`, `compareShippingOptions`, `prepareBookingDraft` and `getBookingStatus` run on their own (L3: read or prepare, never binding). `confirmBooking` (L2) only runs when the policy finds a current approval for the exact proposal. Every call goes through `policy.authorize()` first, whatever the planner wanted.
+- **Hard restrictions versus commercial exceptions.** Two separate lists. Hard restrictions (a piece over 1,000 kg or 244 cm, Chilled with Frozen, a domestic-only airport on an international route, a past date, pickup hours, the same airport twice) block for everyone and have no approval path, the Manager included: only a changed shipment clears them. Commercial exceptions can be approved by the role named on each: going over budget needs the Logistics Manager; arriving after the deadline needs the user's acceptance.
+- **Dangerous goods and live animals** are handed to the manual form with an explanation of why a specialist is needed and every field known so far, with nothing invented. The form keeps applying its own hard limits.
+- **Proposals are versioned.** Each one has an id, a version and a hash of its terms (shipment, flight, price lines, exceptions, conditions). An approval is tied to all three, so a rejection, an edit, a new price or released space makes a new version that needs approval again, and the earlier approval stops counting. A re-quote at the same price keeps the approval. Attached documents are checked again at confirmation; they aren't part of the terms.
+- **Idempotent booking.** The key is one per proposal version (`BK-<proposal>-v<version>`), and the mock ledger returns the same booking for the same key, so a double click or a retry can't book twice.
+- **Error recovery.** Read-only tools are tried 3 times, then the task is marked Failed with Retry. If a booking times out, the agent checks its status before anything else; if the status can't be checked either, it stays "status unknown" and nothing is re-sent. A changed price or released space at confirmation goes back to the user for approval.
+- **Session restoration.** State is saved after every step and restored on reload. Saved data is validated first; anything malformed is dropped. A run that was in progress comes back paused, and a booking that was in flight comes back as "status unknown", which makes the agent check before doing anything else.
+- **Audit log.** Append-only and numbered: who acted (user, Manager, agent, system), each tool call and its result with its autonomy level, approvals with their proposal version and id, invalidations, refusals, and the idempotency key of every booking attempt.
+- **Fault injection.** The mock carrier API can fail searches or rates, return no flights, raise the price or release the space at confirmation, refuse or time out a booking (with or without it going through), and fail the status check, so every recovery path can be rehearsed.
+
+### Session storage limitations
+
+The agent's state and the mock booking ledger live in the tab's `sessionStorage`. That's enough for a prototype, but:
+
+- It belongs to **one tab**. Another tab, another browser or another device starts from scratch, and duplicate-booking protection only works inside that tab. A real system checks idempotency keys on the server.
+- It's **gone when the tab closes**.
+- It **can be edited** in the browser's dev tools. Loaded data is validated and the terms hash catches an edited proposal, but nothing stored in a browser can be trusted the way a server can.
+- It **can be unavailable** (a private window, blocked site data, a full quota). The agent then keeps working in memory and reports that it can't resume after a reload.
+
+```
+src/agent/
+  types.ts        state, proposal, approval, log entry, the mock-mode labels
+  interpret.ts    rule-based reading of the goal (where a language model could plug in later, server-side)
+  policy.ts       autonomy levels, hard restrictions, commercial exceptions, terms hash, authorize()
+  agent.ts        the planner, tool runner, approvals, recovery, pause/resume, save/restore, audit log
+  mockApi.ts      synthetic carrier API with fault injection
+  ledger.ts       mock bookings by idempotency key
+  shipment.ts     the agent's shipment and its bridge to the booking form's data
+  storage.ts      guarded session storage with an in-memory fallback
+  util.ts         clock, hash, seeded random
+```
+
 ## Run it locally
 
 ```bash
@@ -133,13 +170,15 @@ npm run build      # writes assets/app.js and assets/app.css
 
 ```bash
 npm test             # both suites
-npm run test:unit    # booking rules: validation, limits, rate, search (Node's test runner)
+npm run test:unit    # booking rules, and 34 agent scenarios (Node's test runner)
 npm run test:e2e     # builds, then opens every step of all 16 flows in Chromium (Playwright)
 ```
 
 The end-to-end suite needs Chromium once: `npx playwright install chromium`. It opens the built site straight from disk, so no server is needed.
 
-What it covers: every step of every flow opens without errors and highlights the button its note mentions; Next, Previous and the arrow keys; the Step 1 dropdown with mouse and keyboard, totals, errors that clear and Save and continue; the designed error states of Steps 1 and 2; attaching, rejecting and removing documents with Undo; accepting terms and Edit on Review; the leave dialog and the draft it keeps; search suggestions, no results, no access and exact match; tracking tabs; and the portfolio preview.
+The agent scenarios cover the success path; missing and ambiguous information (it asks, it never guesses); a hard restriction that no approval can clear; dangerous goods and live animals handed to the form with their data; no options; going over budget (Manager approval and rejection); a late arrival the user accepts; a price change and released space at confirmation; an expired quote; a rejection and an edit that re-plan and void the approval; failing tools and Retry; booking timeouts with and without a booking; duplicate confirmation; confirming without approval; missing documents; pause, reload and resume; a reload in the middle of a booking; corrupted saved state; and storage that isn't available.
+
+What the end-to-end suite covers: every step of every flow opens without errors and highlights the button its note mentions; Next, Previous and the arrow keys; the Step 1 dropdown with mouse and keyboard, totals, errors that clear and Save and continue; the designed error states of Steps 1 and 2; attaching, rejecting and removing documents with Undo; accepting terms and Edit on Review; the leave dialog and the draft it keeps; search suggestions, no results, no access and exact match; tracking tabs; and the portfolio preview.
 
 ## Credits
 
