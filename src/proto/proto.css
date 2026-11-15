@@ -412,7 +412,8 @@
 .a-options { display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
 .a-options-intro { margin: 0; font-size: 14px; color: var(--p-muted); }
 .a-option { border: 1px solid var(--p-line); border-radius: 10px; background: #fff; }
-.a-option.rec { border-color: var(--p-indigo); box-shadow: 0 0 0 1px var(--p-indigo); }
+/* The strong stroke marks the option in the proposal (a selection); "Recommended" is said by its badge only */
+.a-option.sel { border-color: var(--p-indigo); box-shadow: 0 0 0 1px var(--p-indigo); }
 .a-option-top { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) auto; gap: 18px; padding: 14px 16px; align-items: start; }
 .a-option-id { display: flex; flex-direction: column; gap: 3px; font-size: 14px; }
 .a-option-id b { font-size: 15.5px; font-weight: 600; }
