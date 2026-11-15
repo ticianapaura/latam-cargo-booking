@@ -8,6 +8,19 @@ Playable front end of a five-step **air cargo booking flow** for CargoPilot AI, 
 >
 > **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step and will run on fixed rules and synthetic data, with no language model.
 
+## Two different kinds of AI in this project
+
+Keep these apart when reading the repo or the case study:
+
+| | What it is | Status |
+| --- | --- | --- |
+| **AI-assisted development** | I designed the screens and wrote this front end with an AI assistant (Claude): the design canvas, the generated screens, the React code and the tests. | Done. It's how the project was made, not a feature of the product. |
+| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
+
+## Known issues
+
+- [#1](https://github.com/ticianapaura/latam-cargo-booking/issues/1) Map tab on tracking doesn't advance the flow from step 8 to 9. Must be fixed before the final case study.
+
 ## How to navigate
 
 The demo opens on an **index of every flow**. Pick one and follow it screen by screen:
