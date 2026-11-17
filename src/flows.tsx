@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import ReviewChanged from "./screens/ReviewChanged";
 import SessionExpired from "./screens/SessionExpired";
 import { EMPTY_STEP1, FILLED, INVALID_STEP1, INVALID_STEP2 } from "./proto/data";
+import { EXAMPLES } from "./proto/agentSession";
 import type { Preset } from "./proto/Prototype";
 import type { Page } from "./proto/store";
 
@@ -17,6 +18,8 @@ export type Step = {
   preset?: Preset;
   /** A fixed screen from the design canvas, for moments the live app doesn't simulate */
   render?: () => ReactElement;
+  /** On a live screen that doesn't change page (the agent), clicking the highlighted control also moves the flow on */
+  advance?: boolean;
 };
 
 export type Flow = {
@@ -25,11 +28,14 @@ export type Flow = {
   title: string;
   summary: string;
   steps: Step[];
+  /** An agent scenario: entering the flow at its first step starts a new plan with this goal written in */
+  agent?: { goal: string; sims?: string[] };
 };
 
-export type GroupId = "happy" | "errors" | "interruptions" | "tracking" | "search" | "search-edge";
+export type GroupId = "agent" | "happy" | "errors" | "interruptions" | "tracking" | "search" | "search-edge";
 
 export const GROUPS: { id: GroupId; title: string; description: string; tone: string }[] = [
+  { id: "agent", title: "Plan with CargoPilot", description: "Describe the shipment in a sentence. CargoPilot plans the booking, does the routine work and stops wherever a person has to decide. Each flow runs live on the agent page: do what the note says, or use Next.", tone: "indigo" },
   { id: "happy", title: "Happy path", description: "A new booking from the first empty step to live tracking, with nothing going wrong.", tone: "green" },
   { id: "errors", title: "Invalid data on each step", description: "What happens when the user saves a step with something wrong, and how they get back on track.", tone: "red" },
   { id: "interruptions", title: "Interruptions while booking", description: "Leaving halfway, a failed save and an expired session. The draft is never lost.", tone: "orange" },
@@ -57,7 +63,106 @@ const S = {
 
 const with_ = (step: Step, patch: Partial<Step>): Step => ({ ...step, ...patch });
 
+
+/* ---------- with the agent: live scenarios on the agent page ---------- */
+
+const SALMON = "Ship 10 boxes of fresh salmon, 25 kg each, 35x40x60 cm, chilled, from EZE to GRU, pick up on Nov 11";
+const example = (label: string) => EXAMPLES.find((e) => e.label === label)!.text;
+
+const A = (label: string, note: string, cta?: string): Step => ({ page: "agent", label, note, cta, advance: true });
+const GOAL = (extra = "") =>
+  A("Describe the goal", `The goal is written in plain words, the way a coordinator would say it. Before anything runs, the four steps under it say what happens on its own and what waits for you.${extra} Press Start planning, or write your own.`, "Start planning");
+const DETAILS = A("Details and documents", "The options are ready. The proposal needs pickup and delivery details: use Fill in sample details, press Continue, then Attach sample documents. Documents aren't part of the price, so the proposal doesn't change.", "Attach sample documents");
+
+export const AGENT_FLOWS: Flow[] = [
+  {
+    id: "agent-happy",
+    group: "agent",
+    title: "Book with the agent, start to finish",
+    summary: "From one sentence to a booking: a question, a recommendation, one approval.",
+    agent: { goal: example("Salmon to São Paulo") },
+    steps: [
+      GOAL(),
+      A("It asks, it never guesses", "Buenos Aires has two airports, so CargoPilot stops and asks instead of picking one. Choose EZE and press Continue.", "Continue"),
+      A("A recommendation you can read", "Three options, the recommended one first: why it fits the deadline and the budget, door-to-door time and the price breakdown. Open Show and correct to see where every value came from. Then fill in the details with Fill in sample details and press Continue.", "Continue"),
+      A("Documents", "Fresh salmon can't be booked without its documents. Attach the sample ones: they aren't part of the price, so the proposal doesn't change.", "Attach sample documents"),
+      A("One approval, one proposal", "The amber card is the approval for this exact version: what gets booked, the price, and what Approve means. Nothing has been booked yet.", "Approve and book"),
+      A("Booked, on the record", "Booked from proposal v1, with its AWB, and all 9 steps done. Open Activity log in the panel: every tool call, its autonomy level and the approval are there."),
+    ],
+  },
+  {
+    id: "agent-manager",
+    group: "agent",
+    title: "Over budget: the Manager decides",
+    summary: "The faster option costs more than the budget. The Manager approves the exception, not the booking.",
+    agent: { goal: example("Over budget") },
+    steps: [
+      GOAL(" The budget is USD 1,000."),
+      DETAILS,
+      A("Choose the faster option", "Express arrives sooner but goes over the budget. Press Use this option instead on the Express card."),
+      A("Waiting for the Manager", "The coordinator can't approve going over budget, so the plan waits and says who it waits for. Switch Viewing as to Manager in the header.", "Manager"),
+      A("The Manager decides the exception", "Marta Ruiz (simulated) approves or rejects only the exception. She can't book. Press Approve exception.", "Approve exception"),
+      A("Back to the coordinator", "Switch Viewing as back to Coordinator: the approval card says the Manager approved going over budget. Approve and book to finish.", "Coordinator"),
+    ],
+  },
+  {
+    id: "agent-price",
+    group: "agent",
+    title: "The price changes at booking",
+    summary: "The carrier quotes more at the last moment: a new version, what changed, approval asked again.",
+    agent: { goal: SALMON, sims: ["price"] },
+    steps: [
+      GOAL(" In Prototype controls, “The price goes up at booking” is already switched on."),
+      DETAILS,
+      A("Approve version 1", "The proposal is ready for approval at the quoted price. Approve it.", "Approve and book"),
+      A("What changed since v1", "At booking the carrier quoted 10% more. Nothing was booked: a new version shows what changed, and the earlier approval no longer counts. Approve again to book at the new price.", "Approve and book"),
+      A("Booked at the new price", "Booked from version 2, the one you approved. The log shows the first approval was voided by the price change."),
+    ],
+  },
+  {
+    id: "agent-blocked",
+    group: "agent",
+    title: "A limit no one can approve",
+    summary: "A domestic-only airport on an international route: blocked for everyone, with a fix offered, never applied alone.",
+    agent: { goal: "Ship 10 boxes of auto parts, 25 kg each, 35x40x60 cm, from Mendoza to GRU, pick up on Nov 12" },
+    steps: [
+      GOAL(),
+      A("Blocked for everyone", "Mendoza only handles domestic cargo. A hard restriction has no approval path, the Manager included. Switch Viewing as to Manager to check.", "Manager"),
+      A("Nothing for the Manager", "The Manager has nothing to approve here. Switch back to Coordinator.", "Coordinator"),
+      A("A fix, offered", "CargoPilot offers a fix but never applies it on its own. Press Use EZE: the plan runs again from the route.", "Use EZE"),
+      A("Back on track", "From Buenos Aires the shipment can fly: options, recommendation and the rest of the plan."),
+    ],
+  },
+  {
+    id: "agent-handoff",
+    group: "agent",
+    title: "Dangerous goods go to the form",
+    summary: "Lithium batteries need a specialist: explained, and handed to the form with everything known.",
+    agent: { goal: example("Lithium batteries") },
+    steps: [
+      GOAL(),
+      A("Needs a specialist", "Lithium batteries are dangerous goods. CargoPilot explains why a specialist is needed and doesn't plan the booking. Press Continue in the form.", "Continue in the form"),
+      { page: "step1", label: "The form, filled in", note: "Step 1 opens with what the plan knew: dangerous goods, 3 pieces of 18 kg, 50 × 40 × 30 cm, Córdoba to Lima. Nothing is invented, and the form applies its own limits." },
+    ],
+  },
+  {
+    id: "agent-unknown",
+    group: "agent",
+    title: "When the status is unknown",
+    summary: "The booking times out and can't be checked: said plainly, nothing re-sent, checked again.",
+    agent: { goal: SALMON, sims: ["timeout-unknown"] },
+    steps: [
+      GOAL(" In Prototype controls, “Booking times out, status can't be checked” is already switched on."),
+      DETAILS,
+      A("Approve and book", "Approve the proposal. The booking service will time out.", "Approve and book"),
+      A("Status unknown", "It isn't known whether it booked. CargoPilot doesn't guess and doesn't send it again; Cancel is hidden until the status is known. Press Check the status again.", "Check the status again"),
+      A("Booked once", "The check finds the booking: one booking, under the same idempotency key, never two."),
+    ],
+  },
+];
+
 export const FLOWS: Flow[] = [
+  ...AGENT_FLOWS,
   {
     id: "happy-path",
     group: "happy",
@@ -234,10 +339,11 @@ export const FLOWS: Flow[] = [
 ];
 
 /** Screens shown in the autoplay preview (?embed=1) */
+const flow = (id: string) => FLOWS.find((f) => f.id === id)!;
 export const REEL: Step[] = [
   S.empty,
-  FLOWS[1].steps[1],
+  flow("cargo-type-errors").steps[1],
   S.filled, S.route, S.docs, S.review, S.confirmed,
-  FLOWS[12].steps[2],
+  flow("search-booking").steps[2],
   S.tracking, S.map,
 ];

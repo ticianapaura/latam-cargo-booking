@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
-import { FLOWS, GROUPS, REEL } from "./flows";
+import { AGENT_FLOWS, FLOWS, GROUPS, REEL } from "./flows";
+import { agentSession } from "./proto/agentSession";
 import { BRAND, BrandMark } from "./brand";
 import type { Flow } from "./flows";
 import { Prototype, StaticPrototype, presetBooking, presetUi } from "./proto/Prototype";
@@ -59,8 +60,12 @@ function ScaledScreen({ children, cta, onCta, max = 1 }: { children: ReactNode; 
     const mark = () => {
       const old = el.querySelector(".cta-hotspot");
       if (!cta) return old?.classList.remove("cta-hotspot");
-      const target =
-        [...el.querySelectorAll<HTMLElement>("button, a")].find((b) => !b.hasAttribute("disabled") && b.textContent?.trim().startsWith(cta)) ??
+      const all = [...el.querySelectorAll<HTMLElement>("button, a")];
+      // An exact label wins, so "Continue" never lights up "Continue in the form instead"; while it's disabled, nothing is lit
+      const exact = all.filter((b) => b.textContent?.trim() === cta);
+      const target = exact.length
+        ? exact.find((b) => !b.hasAttribute("disabled"))
+        : all.find((b) => !b.hasAttribute("disabled") && b.textContent?.trim().startsWith(cta)) ??
         // Tabs in the mockups are plain text: fall back to a leaf element with that exact label
         [...el.querySelectorAll<HTMLElement>("span, div")].find((b) => b.childElementCount === 0 && b.textContent?.trim() === cta);
       if (old && old !== target) old.classList.remove("cta-hotspot");
@@ -91,38 +96,47 @@ function ScaledScreen({ children, cta, onCta, max = 1 }: { children: ReactNode; 
 /* ---------- index of flows ---------- */
 
 function Index() {
+  const manual = FLOWS.filter((f) => f.group !== "agent");
   const total = FLOWS.reduce((n, f) => n + f.steps.length, 0);
+  const toManual = () => document.getElementById("manual")?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
     <main className="index">
       <header className="hero">
         <div className="brand">
           <Logo />
-          <span className="mono">New cargo booking · front end</span>
+          <span className="mono">Agentic AI UX · Human-in-the-loop</span>
         </div>
-        <h1>Booking air cargo with no surprises at the last step</h1>
+        <h1>An agent that books air cargo, and <em>knows when to stop</em></h1>
         <p className="lead">
-          A five-step air cargo booking flow for CargoPilot AI, a fictional product, built from my design case study.
-          Every flow below is playable: pick one, follow it screen by screen, and come back here to try another.
+          A coordinator describes the shipment in a sentence. CargoPilot checks it, searches flights, compares prices
+          and prepares one proposal. It never books without approval, sends exceptions to the Manager, and says so when
+          it doesn’t know. The five-step form is still here, next to it.
         </p>
+        <div className="hero-actions">
+          <a className="hero-btn primary" href={flowHref("agent-happy")}>Try the agent →</a>
+          <button type="button" className="hero-btn" onClick={toManual}>See the manual flows</button>
+        </div>
         <dl className="stats">
-          <div><dt>{FLOWS.length}</dt><dd>flows</dd></div>
-          <div><dt>{GROUPS.length}</dt><dd>groups</dd></div>
+          <div><dt>{AGENT_FLOWS.length}</dt><dd>agent flows</dd></div>
+          <div><dt>{manual.length}</dt><dd>manual flows</dd></div>
           <div><dt>{total}</dt><dd>screens to walk</dd></div>
         </dl>
         <p className="status">
-          <b>Mock mode, no language model.</b> The agent path is in progress: open any flow, then New booking → Plan with
-          CargoPilot. It runs on fixed rules and synthetic data, and says so on screen. Nothing in it is LLM-powered.
+          <b>Mock mode, no language model.</b> The agent runs on fixed rules and synthetic data, and says so on screen.
+          Nothing in it is LLM-powered.
         </p>
         <p className="how">
-          <b>How to use it:</b> open a flow, then click the highlighted button on the screen, use Next, or press
-          the ← → keys. “All flows” takes you back here at any point.
+          <b>How to use it:</b> open a flow and do what the note on the left says: click the highlighted control, use
+          Next, or press the ← → keys. “All flows” takes you back here at any point.
         </p>
       </header>
 
       {GROUPS.map((g, gi) => {
         const flows = FLOWS.filter((f) => f.group === g.id);
         return (
-          <section key={g.id} className="group" aria-labelledby={`g-${g.id}`}>
+          <section key={g.id} className="group" id={gi === 1 ? "manual" : undefined} aria-labelledby={`g-${g.id}`}>
+            {gi === 0 && <p className="part mono">Case 02 · With the agent</p>}
+            {gi === 1 && <p className="part mono">Case 01 · Manual booking, the form step by step</p>}
             <div className="group-head">
               <span className={`dot tone-${g.tone}`} aria-hidden="true" />
               <h2 id={`g-${g.id}`}>
@@ -158,7 +172,8 @@ function Index() {
 
       <footer className="index-foot">
         <p>
-          Design and front end by <a href="https://ticianapaura.github.io/">Ticiana Paura</a>. Case study on{" "}
+          Design by <a href="https://ticianapaura.github.io/">Ticiana Paura</a>. Front end built with AI assistance
+          (Claude): React and TypeScript, with unit and end-to-end tests. Case study on{" "}
           <a href="https://www.behance.net/ticianne" target="_blank" rel="noopener">Behance</a>. Concept project:
           CargoPilot AI is fictional, and its flights, prices and bookings are synthetic.
         </p>
@@ -196,6 +211,14 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
     lastFlow.current = flow.id;
     if (freshFlow || s.preset?.b) setBooking(freshFlow ? presetBooking(s.preset) : (b) => ({ ...b, ...s.preset?.b }));
     setUiState((u) => ({ ...(freshFlow ? INITIAL_UI : { ...INITIAL_UI, draft: u.draft, savedAt: u.savedAt }), ...s.preset?.ui }));
+  }, [flow, step]);
+
+  // An agent flow entered at its first step starts a new plan with its goal written in
+  const prepared = useRef<string | null>(null);
+  useEffect(() => {
+    if (!flow.agent || step !== 0 || prepared.current === flow.id) return;
+    prepared.current = flow.id;
+    agentSession().prepare(flow.agent.goal, flow.agent.sims);
   }, [flow, step]);
 
   const go = useCallback(
@@ -236,7 +259,7 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
   useEffect(() => {
     document.title = `${flow.title} · ${BRAND}`;
     return () => {
-      document.title = `${BRAND} · Booking flows`;
+      document.title = `${BRAND} · Agentic booking`;
     };
   }, [flow]);
 
@@ -291,7 +314,11 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
               </p>
             )}
             {current.page && !offPage && (
-              <p className="hint">Everything on this screen works: fields, dropdowns, menu, search and buttons.</p>
+              <p className="hint">
+                {current.page === "agent"
+                  ? "This is the live agent: it really runs, in mock mode. You can also type your own goal, correct what it read, pause or cancel."
+                  : "Everything on this screen works: fields, dropdowns, menu, search and buttons."}
+              </p>
             )}
             {last && (
               <p className="hint">
@@ -317,7 +344,7 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
         <ScaledScreen
           key={`${flow.id}-${step}-${livePage ?? "static"}`}
           cta={offPage ? undefined : current.cta}
-          onCta={!current.page && !last ? () => go(step + 1) : undefined}
+          onCta={(!current.page || current.advance) && !last ? () => go(step + 1) : undefined}
         >
           {livePage ? (
             <Prototype page={livePage} booking={booking} ui={ui} onBooking={setBooking} onUi={onUi} onNavigate={onNavigate} />

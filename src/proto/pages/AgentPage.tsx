@@ -234,7 +234,12 @@ function ManagerBanner({ st }: { st: AgentState }) {
 /* ---------- 1 · the goal ---------- */
 
 function Composer({ agent, disabled, onForm }: { agent: Agent; disabled: boolean; onForm: () => void }) {
-  const [text, setText] = useState("");
+  const s = useAgentSession();
+  const [text, setText] = useState(() => s.draft);
+  // A guided flow writes the goal in for the visitor
+  useEffect(() => {
+    if (s.draft) setText(s.draft);
+  }, [s, s.draftRev]);
   const start = () => text.trim() && void agent.submitGoal(text);
   return (
     <section className="a-card a-composer" aria-labelledby="goal-label">
@@ -593,6 +598,10 @@ function taskBody(id: TaskId, c: Ctx): ReactNode {
 
 /* ---------- questions ---------- */
 
+const SAMPLE_DETAILS: Partial<Record<Key, string>> = {
+  pickupTime: "10:00", pickupAddress: "Ruta 205 km 32", originPostal: "1804", deliveryAddress: "Rua Dr. Assis 410", destPostal: "07190-100",
+};
+
 function Questions({ c, title, why }: { c: Ctx; title: string; why: string }) {
   const st = c.agent.state;
   const [drafts, setDrafts] = useState<Partial<Record<Key, Draft>>>({});
@@ -613,6 +622,9 @@ function Questions({ c, title, why }: { c: Ctx; title: string; why: string }) {
     setErrors(errs);
     if (entries.length && !Object.keys(errs).length) void c.agent.setFields(entries, "answer");
   };
+  // Sample pickup and delivery details, offered only on the route they're valid for
+  const route = `${st.shipment.originAirport?.value}-${st.shipment.destAirport?.value}`;
+  const sample = route === "EZE-GRU" ? c.questions.filter((q) => SAMPLE_DETAILS[q.field as Key]) : [];
   return (
     <form className="a-block you" onSubmit={(e) => { e.preventDefault(); submit(); }} aria-label={title}>
       <div className="a-block-head">
@@ -645,6 +657,14 @@ function Questions({ c, title, why }: { c: Ctx; title: string; why: string }) {
           );
         })}
       </div>
+      {!c.manager && sample.length > 0 && (
+        <p className="p-help a-sample">
+          <button type="button" className="p-link" onClick={() => setDrafts({ ...drafts, ...Object.fromEntries(sample.map((q) => [q.field, SAMPLE_DETAILS[q.field as Key]])) })}>
+            Fill in sample details
+          </button>{" "}
+          Prototype: sample addresses for this route, so you don't have to type them.
+        </p>
+      )}
       {!c.manager && (
         <div className="a-row-between">
           <button type="button" className="p-link" onClick={c.onForm}><Icon d={A.form} size={16} /> Continue in the form instead</button>

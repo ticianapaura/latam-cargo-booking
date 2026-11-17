@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 
 const BASE = pathToFileURL(resolve("index.html")).href;
-const EXPECTED_FLOWS = 16;
+const EXPECTED_FLOWS = 22;
 
 let browser;
 before(async () => {
@@ -41,10 +41,12 @@ const go = async (page, hash) => {
 const count = async (page) => (await page.innerText(".count")).split("/").map((s) => Number(s.trim()));
 
 describe("index", () => {
-  test(`lists ${EXPECTED_FLOWS} flows in 6 groups`, async () => {
+  test(`lists ${EXPECTED_FLOWS} flows in 7 groups, the agent first`, async () => {
     const { page, errors } = await open();
     assert.equal(await page.locator(".card").count(), EXPECTED_FLOWS);
-    assert.equal(await page.locator(".group").count(), 6);
+    assert.equal(await page.locator(".group").count(), 7);
+    assert.match(await page.innerText(".group >> nth=0"), /Plan with CargoPilot/);
+    assert.equal(await page.getAttribute(".hero-btn.primary", "href"), "#/flow/agent-happy/1");
     assert.doesNotMatch(await page.innerText("body"), /LATAM/);
     assert.match(await page.innerText("body"), /Mock mode, no language model/);
     assert.deepEqual(errors, []);
@@ -80,7 +82,8 @@ describe("every step of every flow", () => {
         const leak = text.match(/LATAM|\bLA ?\d{4}\b|\b045-\d/);
         if (leak) problems.push(`${id}/${n}: shows "${leak[0]}"`);
         // When the note says to click something, it must be highlighted on screen (unless it's disabled for now)
-        const hint = await page.locator(".note .hint b").first().textContent().catch(() => null);
+        // Agent flows are live: their controls appear as the visitor acts (walked separately below)
+        const hint = id.startsWith("agent-") ? null : await page.locator(".note .hint b").first().textContent().catch(() => null);
         if (hint) {
           const lit = await page.locator(".cta-hotspot").count();
           const disabled = await page.locator(`.screen button:disabled:has-text("${hint}")`).count();
@@ -88,7 +91,7 @@ describe("every step of every flow", () => {
         }
       }
     }
-    assert.ok(steps >= 45, `walked only ${steps} steps`);
+    assert.ok(steps >= 75, `walked only ${steps} steps`);
     assert.deepEqual(problems, []);
     assert.deepEqual(errors, []);
     await page.close();
@@ -652,6 +655,106 @@ describe("agent path · review fixes", () => {
     assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Search available flights");
     await page.click("button:has-text('Group the finished steps again')");
     assert.equal(await page.locator(".a-task-group").count(), 1);
+    await page.close();
+  });
+});
+
+/* ---------- agent flows in the index: walked by clicking only what each step highlights ---------- */
+
+describe("agent flows", () => {
+  /** Clicks the highlighted control once it's there and enabled */
+  const hot = async (page) => {
+    await page.waitForSelector(".screen .cta-hotspot:not([disabled])");
+    await page.click(".screen .cta-hotspot");
+    await page.waitForTimeout(80);
+  };
+  const sampleDetails = async (page) => {
+    await page.click("button:has-text('Fill in sample details')");
+    await page.click("form[aria-label='A few details for the proposal'] button[type=submit]");
+  };
+
+  test("each agent flow opens with its goal written in and a fresh plan", async () => {
+    const { page, errors } = await open("?agentDelay=0");
+    for (const id of ["agent-happy", "agent-manager", "agent-price", "agent-blocked", "agent-handoff", "agent-unknown"]) {
+      await go(page, `#/flow/${id}/1`);
+      await page.waitForSelector("#goal");
+      assert.ok((await page.inputValue("#goal")).length > 30, `${id}: goal written in`);
+      assert.equal(await page.locator(".cta-hotspot").innerText(), "Start planning");
+    }
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("happy path: following the highlights books once, and the flow follows along", async () => {
+    const { page, errors } = await open("?agentDelay=0#/flow/agent-happy/1");
+    await hot(page); // Start planning
+    assert.deepEqual(await count(page), [2, 6]);
+    await page.click("[role=radio]:has-text('EZE')");
+    await hot(page); // Continue (not "Continue in the form instead")
+    assert.deepEqual(await count(page), [3, 6]);
+    await page.click("button:has-text('Fill in sample details')");
+    await hot(page); // Continue with the details
+    await hot(page); // Attach sample documents
+    assert.deepEqual(await count(page), [5, 6]);
+    await hot(page); // Approve and book
+    assert.deepEqual(await count(page), [6, 6]);
+    await page.waitForSelector(".a-block.ok");
+    assert.match(await page.innerText(".a-block.ok"), /Booked #\d+ · AWB 000-\d{8}/);
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("Manager flow, price flow and unknown status reach their outcome", async () => {
+    const { page, errors } = await open("?agentDelay=0#/flow/agent-manager/1");
+    await hot(page);
+    await sampleDetails(page);
+    await hot(page); // documents
+    await page.click("article:has-text('Express') button:has-text('Use this option instead')");
+    await page.click(".bar-nav button.primary");
+    await hot(page); // Manager
+    await hot(page); // Approve exception
+    await hot(page); // Coordinator
+    await page.click("button:has-text('Approve and book')");
+    await page.waitForSelector(".a-block.ok");
+
+    await go(page, "#/flow/agent-price/1");
+    await hot(page);
+    await sampleDetails(page);
+    await hot(page);
+    await hot(page); // approve v1
+    await page.waitForSelector("text=What changed since v1");
+    await hot(page); // approve v2
+    await page.waitForSelector(".a-block.ok");
+
+    await go(page, "#/flow/agent-unknown/1");
+    await hot(page);
+    await sampleDetails(page);
+    await hot(page);
+    await hot(page); // approve
+    await page.waitForSelector("text=It isn't known yet whether this booked");
+    await hot(page); // check again
+    assert.deepEqual(await count(page), [5, 5]);
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("blocked and hand-off flows", async () => {
+    const { page, errors } = await open("?agentDelay=0#/flow/agent-blocked/1");
+    await hot(page);
+    await page.waitForSelector(".a-block.bad");
+    await hot(page); // Manager
+    await hot(page); // Coordinator
+    await hot(page); // Use EZE
+    await page.waitForSelector(".a-option.rec");
+    assert.deepEqual(await count(page), [5, 5]);
+
+    await go(page, "#/flow/agent-handoff/1");
+    await hot(page);
+    await hot(page); // Continue in the form
+    await page.waitForSelector("text=Filled in from your CargoPilot plan");
+    assert.deepEqual(await count(page), [3, 3]);
+    assert.equal(await page.inputValue("#pieces"), "3");
+    assert.deepEqual(errors, []);
     await page.close();
   });
 });

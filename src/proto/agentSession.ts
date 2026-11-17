@@ -43,6 +43,11 @@ class AgentSession {
   readonly api: MockCarrierApi;
   agent: Agent;
   role: Role = "coordinator";
+  /** A goal written in for the visitor by a guided flow; the composer shows it until they start */
+  draft = "";
+  draftRev = 0;
+  private deps: ConstructorParameters<typeof Agent>[0];
+  private unsubscribe: () => void;
   /** Simulations switched on; each one is applied to the mock API when chosen */
   armed = new Set<string>();
   private listeners = new Set<() => void>();
@@ -51,10 +56,34 @@ class AgentSession {
     const clock = prototypeClock();
     this.api = new MockCarrierApi(clock, this.ledger);
     const deps = { api: this.api, ledger: this.ledger, store: this.store, clock, delayMs: delay() };
+    this.deps = deps;
     this.agent = Agent.restore(deps) ?? new Agent(deps);
-    this.agent.subscribe(() => this.emit());
+    this.unsubscribe = this.agent.subscribe(() => this.emit());
     // A booking in flight when the page reloaded is checked at once, before anything else
     if (this.agent.state.status === "status_unknown") void this.agent.run();
+  }
+
+  /** Starts a guided scenario: an empty plan, the Coordinator's view, only these simulations armed, and the goal written in */
+  prepare(goal: string, sims: string[] = []) {
+    this.role = "coordinator";
+    for (const k of Object.keys(this.api.faults) as (keyof Faults)[]) delete this.api.faults[k];
+    this.armed.clear();
+    this.agent.reset();
+    if (this.agent.state.status !== "idle") {
+      // A booking whose status is unknown can't be reset by the agent; a guided scenario starts a new plan instead
+      this.unsubscribe();
+      this.agent = new Agent(this.deps);
+      this.unsubscribe = this.agent.subscribe(() => this.emit());
+    }
+    for (const id of sims) {
+      const sim = SIMULATIONS.find((x) => x.id === id);
+      if (!sim) continue;
+      this.armed.add(id);
+      Object.assign(this.api.faults, sim.faults);
+    }
+    this.draft = goal;
+    this.draftRev++;
+    this.emit();
   }
 
   setRole(role: Role) {

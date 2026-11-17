@@ -1,21 +1,39 @@
-# CargoPilot AI · Booking flows
+# CargoPilot AI · Agentic booking
 
-Playable front end of a five-step **air cargo booking flow** for CargoPilot AI, a fictional product: the happy path, inline errors on every step, interruptions, tracking exceptions and search. Built in React + TypeScript from my design case study.
+A playable prototype of an **air cargo booking agent with human-in-the-loop approvals**. A coordinator describes a shipment in one sentence; CargoPilot reads it, checks the cargo rules, searches flights, compares prices and prepares one proposal. It never books without approval, sends commercial exceptions to the Logistics Manager, and says so when it doesn't know. The manual five-step booking form is still there, next to it.
 
-**[▶ Live demo](https://ticianapaura.github.io/latam-cargo-booking/)** · [Case study on Behance](https://www.behance.net/ticianne) · [Portfolio](https://ticianapaura.github.io/)
+**[▶ Try the agent](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-happy/1)** · [All flows](https://ticianapaura.github.io/latam-cargo-booking/) · [Case study on Behance](https://www.behance.net/ticianne) · [Portfolio](https://ticianapaura.github.io/)
 
-> **Concept project.** CargoPilot AI is a fictional brand. Flights (CP…), air waybills (000-…), prices and bookings are synthetic. The design case study it comes from was made for LATAM Cargo; this prototype is not affiliated with LATAM Airlines Group.
+> **Mock mode, no language model.** The agent is deterministic: rule-based reading of the goal, a state-based planner and mock tools over synthetic data. Nothing in it is LLM-powered, and every screen says so.
 >
-> **Mock mode, no AI features yet.** "AI" is part of the concept's name. The agent path is being added step by step: try it from New booking → **Plan with CargoPilot**. It runs on fixed rules and synthetic data, with no language model, and the page says so.
+> **Concept project.** CargoPilot AI is a fictional brand. Flights (CP…), air waybills (000-…), prices and bookings are synthetic. The original booking case study was made for LATAM Cargo; this prototype is not affiliated with LATAM Airlines Group.
 
-## Two different kinds of AI in this project
+## Front end built with AI assistance
 
-Keep these apart when reading the repo or the case study:
+I designed the experience and built this front end with an AI coding assistant (Claude): the agent core, the React screens, the guided flows and the tests. That's how the project was made; it isn't a feature of the product. Keep the two kinds of AI apart when reading the repo:
 
 | | What it is | Status |
 | --- | --- | --- |
-| **AI-assisted development** | I designed the screens and wrote this front end with an AI assistant (Claude): the design canvas, the generated screens, the React code and the tests. | Done. It's how the project was made, not a feature of the product. |
-| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | In progress. The core (`src/agent/`) and its page are built and tested; bookings don't reach My bookings or tracking yet. Mock mode only: fixed rules and synthetic data, no language model. Nothing here is LLM-powered until a model is actually integrated, and the README will say so when it is. |
+| **AI-assisted front-end development** | Design by me; React + TypeScript code, design-canvas screens and test suites written with Claude, reviewed and directed by me. | Done. |
+| **CargoPilot's agent** | A feature of the fictional product: an agent that plans a booking, calls tools, asks for approval and books. | Built and tested in mock mode (`src/agent/`). No language model is called. |
+
+## Two ways to book, two case studies
+
+- **Case 02 · With the agent** (this project): describe the goal, and the agent does the routine work and stops wherever a person has to decide. 6 guided flows.
+- **Case 01 · Manual**: the original user-driven form, step by step, with its errors, interruptions, tracking and search. 16 flows, all still here.
+
+### Agent flows
+
+Each one runs live on the agent page. The note on the left says what to do; the control to click is highlighted, and clicking it moves the flow on. Next works too.
+
+| Flow | What happens |
+|---|---|
+| [Book with the agent, start to finish](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-happy/1) | One sentence → a question (two airports in Buenos Aires) → a recommendation with reasons → details and documents → one approval → booked, with the activity log. |
+| [Over budget: the Manager decides](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-manager/1) | The faster option goes over budget. The plan waits for the Logistics Manager, who approves the exception, not the booking. |
+| [The price changes at booking](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-price/1) | The carrier quotes 10% more at confirmation: a new version, what changed, approval asked again. |
+| [A limit no one can approve](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-blocked/1) | A domestic-only airport on an international route: blocked for everyone, the Manager included. A fix is offered, never applied alone. |
+| [Dangerous goods go to the form](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-handoff/1) | Lithium batteries need a specialist: explained, and handed to the form with everything known. |
+| [When the status is unknown](https://ticianapaura.github.io/latam-cargo-booking/#/flow/agent-unknown/1) | The booking times out and can't be checked: said plainly, nothing re-sent, Cancel hidden until it's known. |
 
 ## Known issues
 
@@ -23,7 +41,7 @@ Keep these apart when reading the repo or the case study:
 
 ## How to navigate
 
-The demo opens on an **index of every flow**. Pick one and follow it screen by screen:
+The demo opens on an **index of every flow**: the agent flows first, then the manual ones. Pick one and follow it screen by screen:
 
 - **Every screen is interactive.** Type in the fields, open the dropdowns, toggle the handling chips, attach real files, search bookings, switch tabs and use the menu. Validation, totals, the booking summary and the rate update live.
 - Click the **highlighted button** on the screen, use **Next**, or press **← →** to move through the flow.
@@ -32,7 +50,7 @@ The demo opens on an **index of every flow**. Pick one and follow it screen by s
 - **All flows** (or **Esc**) takes you back to the index at any point, so you can try another branch.
 - Every screen has its own link, so you can share an exact step.
 
-## Index of flows
+## Manual flows (Case 01)
 
 The happy path runs first. Every other flow branches off it at the step where something can go wrong, and shows how the user gets back on track.
 
@@ -137,11 +155,11 @@ The page follows the layout validated in the spec: the work in one column, in th
 - **Control.** Pause (while it works or waits for the Manager), Cancel with a confirmation, and *Continue in the form* are always in the panel. The activity log is one click away, closed by default.
 - **Prototype controls** at the bottom of the panel make a problem happen once (price rise, released space, timeouts, a refusal, a failing search, no flights), to review every recovery path. They exist only in this prototype.
 
-Not yet: a booking made here doesn't appear in My bookings, Confirmation or Tracking (next increment), and the agent scenarios aren't flows in the index yet.
+The agent scenarios are guided flows in the index (above). Not yet: a booking made here doesn't appear in My bookings, Confirmation or Tracking.
 
 ## The agent core (mock mode)
 
-`src/agent/` is the agent behind the upcoming "Book with the agent" path. **It is deterministic: rule-based reading of the goal, a state-based planner and mock tools. No language model is called anywhere.** It isn't wired into the app's screens yet.
+`src/agent/` is the agent behind the Plan with CargoPilot page. **It is deterministic: rule-based reading of the goal, a state-based planner and mock tools. No language model is called anywhere.**
 
 - **State-based planning.** The planner looks at the current state and picks the next tool; it doesn't follow a script. Each tool's result is remembered against its inputs, so an answer, an edit or a new price re-runs that tool and everything after it, and nothing before it.
 - **Eight tools, two autonomy levels, enforced in code.** `validateShipment`, `checkCargoRestrictions`, `searchAvailableFlights`, `retrieveFreightRates`, `compareShippingOptions`, `prepareBookingDraft` and `getBookingStatus` run on their own (L3: read or prepare, never binding). `confirmBooking` (L2) only runs when the policy finds a current approval for the exact proposal. Every call goes through `policy.authorize()` first, whatever the planner wanted.
@@ -190,8 +208,8 @@ npm run build      # writes assets/app.js and assets/app.css
 
 ```bash
 npm test             # both suites
-npm run test:unit    # booking rules, and 34 agent scenarios (Node's test runner)
-npm run test:e2e     # builds, then every step of all 16 flows and the agent page, in Chromium (Playwright)
+npm run test:unit    # booking rules and the agent's scenarios: 56 tests (Node's test runner)
+npm run test:e2e     # builds, then every step of all 22 flows, the agent page and a click-through of each agent flow: 40 tests, in Chromium (Playwright)
 ```
 
 The end-to-end suite needs Chromium once: `npx playwright install chromium`. It opens the built site straight from disk, so no server is needed.
