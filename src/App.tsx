@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import { AGENT_FLOWS, FLOWS, GROUPS, REEL } from "./flows";
-import { agentSession } from "./proto/agentSession";
+import { agentSession, EXAMPLES } from "./proto/agentSession";
+
+const EXAMPLE_GOAL = EXAMPLES[0].text;
 import { BRAND, BrandMark } from "./brand";
 import type { Flow } from "./flows";
 import { Prototype, StaticPrototype, presetBooking, presetUi } from "./proto/Prototype";
@@ -357,9 +359,10 @@ function Player({ flow, step }: { flow: Flow; step: number }) {
   );
 }
 
-/* ---------- autoplay preview for the portfolio card (?embed=1) ---------- */
+/* ---------- autoplay previews for the portfolio card ---------- */
 
-function Embed() {
+/** ?embed=form: the manual booking flow, one screen every 2.6 s */
+function FormReel() {
   const [i, setI] = useState(0);
   useEffect(() => {
     const t = window.setInterval(() => setI((n) => (n + 1) % REEL.length), 2600);
@@ -371,6 +374,97 @@ function Embed() {
       <ScaledScreen key={i}>{s.page ? <StaticPrototype page={s.page} preset={s.preset} /> : s.render?.()}</ScaledScreen>
     </div>
   );
+}
+
+const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+const smooth = () => (matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
+
+/** ?embed=1: the agent's happy path, played on the live agent page: the goal typed, a question answered,
+    the recommendation, details and documents, one approval, booked. Then it starts again. */
+function AgentReel() {
+  useEffect(() => {
+    let alive = true;
+    const find = (sel: string, text?: string) =>
+      [...document.querySelectorAll<HTMLElement>(sel)].find((e) => !e.hasAttribute("disabled") && (!text || e.textContent?.trim().startsWith(text)));
+    const wait = async (sel: string, text?: string, ms = 20000) => {
+      for (let t = 0; t < ms; t += 100) {
+        if (!alive) throw new Error("stopped");
+        const el = find(sel, text);
+        if (el) return el;
+        await pause(100);
+      }
+      throw new Error(`timed out: ${sel} ${text ?? ""}`);
+    };
+    const show = (el: Element, offset = 90) =>
+      window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - offset), behavior: smooth() });
+    /** Lights the control the way the guided flows do, then presses it */
+    const press = async (el: HTMLElement) => {
+      el.classList.add("cta-hotspot");
+      await pause(900);
+      el.classList.remove("cta-hotspot");
+      el.click();
+    };
+    const goal = EXAMPLE_GOAL;
+    const play = async () => {
+      const s = agentSession();
+      s.prepare("");
+      window.scrollTo({ top: 0 });
+      await pause(800);
+      // Typed a few characters at a time, always ending on the whole goal
+      for (let n = 3; n < goal.length; n += 3) {
+        s.setDraft(goal.slice(0, n));
+        await pause(28);
+      }
+      s.setDraft(goal);
+      await pause(500);
+      await press(await wait("button", "Start planning"));
+      const eze = await wait("[role=radio]", "EZE");
+      show(eze, 260);
+      await pause(1200);
+      await press(eze);
+      await press(await wait("form[aria-label='A few answers before searching flights'] button[type=submit]"));
+      show(await wait(".a-option.rec"), 180);
+      await pause(3600);
+      const sample = await wait("button", "Fill in sample details");
+      show(sample, 320);
+      await pause(700);
+      await press(sample);
+      await press(await wait("form[aria-label='A few details for the proposal'] button[type=submit]"));
+      const docs = await wait("button", "Attach sample documents");
+      show(docs, 320);
+      await press(docs);
+      show(await wait(".a-block.approve"), 120);
+      await pause(2600);
+      await press(await wait(".a-block.approve button", "Approve and book"));
+      show(await wait(".a-block.ok"), 160);
+      await pause(4200);
+      window.scrollTo({ top: 0, behavior: smooth() });
+      await pause(1200);
+    };
+    void (async () => {
+      while (alive) {
+        try {
+          await play();
+        } catch {
+          await pause(1000);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return (
+    <div className="embed agent-reel" aria-hidden="true">
+      <ScaledScreen>
+        <StaticPrototype page="agent" />
+      </ScaledScreen>
+    </div>
+  );
+}
+
+function Embed() {
+  return new URLSearchParams(window.location.search).get("embed") === "form" ? <FormReel /> : <AgentReel />;
 }
 
 function Logo() {

@@ -277,11 +277,33 @@ describe("portfolio preview", () => {
     page.setDefaultTimeout(5000);
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto(BASE + "?embed=1");
+    await page.goto(BASE + "?embed=1&agentDelay=0");
     await page.waitForTimeout(300);
     assert.equal(await page.locator(".bar").count(), 0);
     assert.ok(await page.locator(".embed .screen > *").count());
     assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("?embed=1 plays the agent's happy path to a booking, then starts again", async () => {
+    const page = await browser.newPage({ viewport: { width: 1400, height: 875 } });
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.goto(BASE + "?embed=1&agentDelay=0");
+    await page.waitForSelector("h1:has-text('Plan with CargoPilot')", { timeout: 5000 });
+    await page.waitForSelector(".a-block.ok", { timeout: 30000 });
+    assert.match(await page.innerText(".a-block.ok"), /Booked #\d+ · AWB 000-\d{8}/);
+    await page.waitForSelector("#goal", { timeout: 15000 }); // looped back to an empty plan
+    assert.deepEqual(errors, []);
+    await page.close();
+  });
+
+  test("?embed=form keeps the manual flow reel", async () => {
+    const page = await browser.newPage({ viewport: { width: 1000, height: 640 } });
+    await page.goto(BASE + "?embed=form");
+    await page.waitForTimeout(300);
+    assert.ok(await page.locator(".embed .screen > *").count());
+    assert.equal(await page.locator("h1:has-text('Plan with CargoPilot')").count(), 0);
     await page.close();
   });
 });

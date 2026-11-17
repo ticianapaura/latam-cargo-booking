@@ -81,7 +81,12 @@ class AgentSession {
       this.armed.add(id);
       Object.assign(this.api.faults, sim.faults);
     }
-    this.draft = goal;
+    this.setDraft(goal);
+  }
+
+  /** Writes a goal into the composer for the visitor */
+  setDraft(text: string) {
+    this.draft = text;
     this.draftRev++;
     this.emit();
   }
